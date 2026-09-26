@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #pragma once
 
 #include "engine/framework/assets/tensor_source.h"
@@ -38,6 +39,11 @@ struct IrodoriConditionOutput {
   std::vector<float> text_state;
   std::vector<float> caption_state;
   float predicted_log_frames = 0.0F;
+  // False when the model has no duration_predictor weights. The graph still
+  // produces a placeholder tensor in that case, but nothing ever writes to it,
+  // so predicted_log_frames is meaningless and must not be used to pick the
+  // utterance length -- ask for an explicit duration instead.
+  bool predicted_log_frames_valid = true;
 };
 
 struct IrodoriSelfAttentionWeights {
