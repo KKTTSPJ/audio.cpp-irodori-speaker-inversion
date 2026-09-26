@@ -1,12 +1,15 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "request.h"
 
 #include "args.h"
 
 #include "engine/framework/audio/wav_reader.h"
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <iomanip>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -33,6 +36,39 @@ void set_option_from_json_field(
     const auto * value = object.find(field);
     if (value != nullptr && !value->is_null()) {
         set_option(options, option_key, json_option_string(*value));
+    }
+}
+
+// Alias resolution for the Irodori-TTS compatibility keys.
+//
+// Several request fields collapse onto one option ("speed" and "duration_scale"
+// both drive duration_scale; "seconds" and "duration_seconds" both drive
+// duration_seconds; the nested "irodori" object repeats most of the top-level
+// names). set_option() rejects a second, differing value for the same key, so a
+// client that spells out both aliases -- exactly what the compatibility layer
+// invites -- made the CLI fail on JSON the server accepts.
+//
+// These helpers overwrite instead, matching ServerState::build_speech_request.
+// The resulting precedence is the same on both sides:
+//
+//     top-level alias  >  nested "irodori"  >  "options" object
+//
+// set_option() is left alone: for argv flags a conflict really is a mistake.
+void overwrite_option(
+    std::unordered_map<std::string, std::string> & options,
+    const std::string & option_key,
+    const std::string & value) {
+    options[option_key] = value;
+}
+
+void overwrite_option_from_json_field(
+    std::unordered_map<std::string, std::string> & options,
+    const engine::io::json::Value & object,
+    const std::string & field,
+    const std::string & option_key) {
+    const auto * value = object.find(field);
+    if (value != nullptr && !value->is_null()) {
+        options[option_key] = json_option_string(*value);
     }
 }
 
@@ -144,7 +180,38 @@ engine::runtime::TaskRequest build_request_from_json(
         if (!voice.speaker.has_value()) {
             voice.speaker = engine::runtime::VoiceReference{};
         }
-        voice.speaker->audio = read_audio_buffer(resolve_case_path(base_dir, *voice_ref));
+        std::filesystem::path ref_path = resolve_case_path(base_dir, *voice_ref);
+        if (ref_path.extension() == ".safetensors") {
+            voice.speaker->speaker_embedding_path = ref_path;
+        } else {
+            voice.speaker->audio = read_audio_buffer(ref_path);
+        }
+        has_voice = true;
+    }
+    if (const auto ref_wav = json_optional_string(value, "ref_wav")) {
+        if (!voice.speaker.has_value()) {
+            voice.speaker = engine::runtime::VoiceReference{};
+        }
+        std::filesystem::path ref_path = resolve_case_path(base_dir, *ref_wav);
+        if (ref_path.extension() == ".safetensors") {
+            voice.speaker->speaker_embedding_path = ref_path;
+        } else {
+            voice.speaker->audio = read_audio_buffer(ref_path);
+        }
+        has_voice = true;
+    }
+    if (const auto speaker_emb = json_optional_string(value, "speaker_embedding")) {
+        if (!voice.speaker.has_value()) {
+            voice.speaker = engine::runtime::VoiceReference{};
+        }
+        voice.speaker->speaker_embedding_path = resolve_case_path(base_dir, *speaker_emb);
+        has_voice = true;
+    }
+    if (const auto ref_embed = json_optional_string(value, "ref_embed")) {
+        if (!voice.speaker.has_value()) {
+            voice.speaker = engine::runtime::VoiceReference{};
+        }
+        voice.speaker->speaker_embedding_path = resolve_case_path(base_dir, *ref_embed);
         has_voice = true;
     }
 
@@ -218,8 +285,54 @@ engine::runtime::TaskRequest build_request_from_json(
     if (const auto speaker = json_optional_string(value, "speaker")) {
         set_option(request.options, "speaker", *speaker);
     }
+    if (const auto input_text = json_optional_string(value, "input")) {
+        if (!request.text_input.has_value()) {
+            request.text_input = engine::runtime::Transcript{*input_text, language};
+        }
+    }
+    // Process nested "irodori" options object if present
+    if (const auto * irodori_val = value.find("irodori"); irodori_val != nullptr && irodori_val->is_object()) {
+        if (const auto num_steps = json_optional_float(*irodori_val, "num_steps")) {
+            overwrite_option(request.options, "num_inference_steps", std::to_string(static_cast<int>(*num_steps)));
+        }
+        if (const auto num_steps = json_optional_float(*irodori_val, "num_inference_steps")) {
+            overwrite_option(request.options, "num_inference_steps", std::to_string(static_cast<int>(*num_steps)));
+        }
+        if (const auto cfg_scale_text = json_optional_float(*irodori_val, "cfg_scale_text")) {
+            overwrite_option(request.options, "text_guidance_scale", std::to_string(*cfg_scale_text));
+        }
+        if (const auto cfg_scale_speaker = json_optional_float(*irodori_val, "cfg_scale_speaker")) {
+            overwrite_option(request.options, "speaker_guidance_scale", std::to_string(*cfg_scale_speaker));
+        }
+        if (const auto seconds = json_optional_float(*irodori_val, "seconds")) {
+            overwrite_option(request.options, "duration_seconds", std::to_string(*seconds));
+        }
+        if (const auto duration_seconds = json_optional_float(*irodori_val, "duration_seconds")) {
+            overwrite_option(request.options, "duration_seconds", std::to_string(*duration_seconds));
+        }
+        if (const auto duration_scale = json_optional_float(*irodori_val, "duration_scale")) {
+            overwrite_option(request.options, "duration_scale", std::to_string(*duration_scale));
+        }
+        overwrite_option_from_json_field(request.options, *irodori_val, "seed", "seed");
+    }
+
+    if (const auto speed = json_optional_float(value, "speed")) {
+        if (*speed > 0.0f) {
+            overwrite_option(request.options, "duration_scale", std::to_string(1.0f / *speed));
+        }
+    }
+
     if (const auto duration_seconds = json_optional_float(value, "duration_seconds")) {
-        set_option(request.options, "duration_seconds", std::to_string(*duration_seconds));
+        overwrite_option(request.options, "duration_seconds", std::to_string(*duration_seconds));
+    }
+    if (const auto seconds = json_optional_float(value, "seconds")) {
+        overwrite_option(request.options, "duration_seconds", std::to_string(*seconds));
+    }
+    if (const auto duration_scale = json_optional_float(value, "duration_scale")) {
+        overwrite_option(request.options, "duration_scale", std::to_string(*duration_scale));
+    }
+    if (const auto num_steps = json_optional_float(value, "num_steps")) {
+        overwrite_option(request.options, "num_inference_steps", std::to_string(static_cast<int>(*num_steps)));
     }
     if (const auto repaint_start = json_optional_float(value, "repaint_start")) {
         set_option(request.options, "repainting_start", std::to_string(*repaint_start));
@@ -300,6 +413,13 @@ engine::runtime::TaskRequest build_request_from_cli(int argc, char ** argv) {
         voice.speaker->audio = read_audio_buffer(std::filesystem::path(*voice_ref));
         has_voice = true;
     }
+    if (const auto speaker_emb = find_arg(argc, argv, "--speaker-embedding")) {
+        if (!voice.speaker.has_value()) {
+            voice.speaker = engine::runtime::VoiceReference{};
+        }
+        voice.speaker->speaker_embedding_path = std::filesystem::path(*speaker_emb);
+        has_voice = true;
+    }
     engine::runtime::StyleCondition style;
     if (const auto style_language = find_arg(argc, argv, "--style-language")) {
         style.language = *style_language;
@@ -357,6 +477,7 @@ engine::runtime::TaskRequest build_request_from_cli(int argc, char ** argv) {
     set_option_from_arg(argc, argv, "--track-name", "track_name", request.options);
     set_option_from_arg(argc, argv, "--speaker", "speaker", request.options);
     set_option_from_arg(argc, argv, "--duration-seconds", "duration_seconds", request.options);
+    set_option_from_arg(argc, argv, "--duration-scale", "duration_scale", request.options);
     set_option_from_arg(argc, argv, "--repaint-start", "repainting_start", request.options);
     set_option_from_arg(argc, argv, "--repaint-end", "repainting_end", request.options);
     set_option_from_arg(argc, argv, "--repaint-mode", "repaint_mode", request.options);

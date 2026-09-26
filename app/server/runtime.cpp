@@ -1,5 +1,7 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "runtime.h"
 
+#include "invalid_request.h"
 #include "multipart.h"
 
 #include "../cli/request.h"
@@ -694,6 +696,11 @@ HttpResponse ServerState::handle(const HttpRequest & request) {
     // sent. (Streaming requests acquire the lock inside the stream body, after
     // headers are sent, so there it becomes a stream error event instead.)
     response = error_response(503, ex.what(), "server_busy");
+  } catch (const InvalidRequestError & ex) {
+    // The caller asked for something impossible (e.g. an unresolvable voice
+    // reference). Anything else still falls through to the 500 handler in
+    // http.cpp.
+    response = error_response(400, ex.what(), "invalid_request_error");
   }
   if (!allowed_origin.empty()) {
       response.headers["Access-Control-Allow-Origin"] = allowed_origin;
@@ -857,6 +864,20 @@ engine::runtime::TaskRequest ServerState::build_speech_request(const LoadedModel
     };
 
     request.options = options_from_object(body.find("options"));
+
+    // 1. Process nested "irodori" options if present
+    if (const auto * irodori_obj = body.find("irodori"); irodori_obj != nullptr && irodori_obj->is_object()) {
+        add_option_from_json(request.options, *irodori_obj, "num_steps", "num_inference_steps");
+        add_option_from_json(request.options, *irodori_obj, "num_inference_steps", "num_inference_steps");
+        add_option_from_json(request.options, *irodori_obj, "seed", "seed");
+        add_option_from_json(request.options, *irodori_obj, "cfg_scale_text", "text_guidance_scale");
+        add_option_from_json(request.options, *irodori_obj, "cfg_scale_speaker", "speaker_guidance_scale");
+        add_option_from_json(request.options, *irodori_obj, "seconds", "duration_seconds");
+        add_option_from_json(request.options, *irodori_obj, "duration_seconds", "duration_seconds");
+        add_option_from_json(request.options, *irodori_obj, "duration_scale", "duration_scale");
+    }
+
+    // 2. Process top-level options & flat key aliases
     add_option_from_json(request.options, body, "seed", "seed");
     add_option_from_json(request.options, body, "temperature", "temperature");
     add_option_from_json(request.options, body, "top_k", "top_k");
@@ -866,6 +887,21 @@ engine::runtime::TaskRequest ServerState::build_speech_request(const LoadedModel
     add_option_from_json(request.options, body, "repetition_penalty", "repetition_penalty");
     add_option_from_json(request.options, body, "guidance_scale", "guidance_scale");
     add_option_from_json(request.options, body, "num_inference_steps", "num_inference_steps");
+    add_option_from_json(request.options, body, "num_steps", "num_inference_steps");
+    add_option_from_json(request.options, body, "seconds", "duration_seconds");
+    add_option_from_json(request.options, body, "duration_seconds", "duration_seconds");
+    add_option_from_json(request.options, body, "duration_scale", "duration_scale");
+    add_option_from_json(request.options, body, "cfg_scale_text", "text_guidance_scale");
+    add_option_from_json(request.options, body, "cfg_scale_speaker", "speaker_guidance_scale");
+
+    // 3. Process OpenAI 'speed' -> 'duration_scale' conversion (speed > 1.0 means faster -> duration_scale < 1.0)
+    if (const auto * speed_val = body.find("speed"); speed_val != nullptr && speed_val->is_number()) {
+        const float speed = speed_val->as_f32();
+        if (speed > 0.0f) {
+            request.options["duration_scale"] = std::to_string(1.0f / speed);
+        }
+    }
+
     if (const auto * value = body.find("instructions")) {
         request.options["instruct"] = value->as_string();
     }
@@ -892,20 +928,105 @@ engine::runtime::TaskRequest ServerState::build_speech_request(const LoadedModel
             request.options["reference_text"] = *preset->reference_text;
         }
     }
+
+    // Helper to resolve voice by ID or path from disk (scans base_dir and voices/ folder)
+    auto resolve_voice_file = [&](const std::string & voice_id_or_path) -> bool {
+        // Try direct path first
+        std::filesystem::path direct_path = resolve_path(request_base_, voice_id_or_path);
+        if (std::filesystem::exists(direct_path) && !std::filesystem::is_directory(direct_path)) {
+            if (!voice.speaker.has_value()) {
+                voice.speaker = engine::runtime::VoiceReference{};
+            }
+            if (direct_path.extension() == ".safetensors") {
+                voice.speaker->speaker_embedding_path = direct_path;
+            } else {
+                voice.speaker->audio = minitts::cli::read_audio_buffer(direct_path);
+            }
+            return true;
+        }
+
+        // Try scanning under base_dir / "voices" and base_dir with candidate extensions.
+        // Only formats something downstream can actually load: .safetensors goes
+        // to the speaker-embedding reader, everything else to read_audio_buffer(),
+        // which is WAV-only. Listing .flac/.mp3/.pt here used to "find" such a
+        // file and then fail inside the WAV parser with an unhelpful 500.
+        static const std::vector<std::string> exts = {
+            ".speaker.safetensors", ".safetensors", ".wav"
+        };
+        const std::vector<std::filesystem::path> search_dirs = {
+            request_base_ / "voices",
+            request_base_
+        };
+
+        for (const auto & dir : search_dirs) {
+            for (const auto & ext : exts) {
+                std::filesystem::path candidate = dir / (voice_id_or_path + ext);
+                if (std::filesystem::exists(candidate)) {
+                    if (!voice.speaker.has_value()) {
+                        voice.speaker = engine::runtime::VoiceReference{};
+                    }
+                    if (candidate.extension() == ".safetensors") {
+                        voice.speaker->speaker_embedding_path = candidate;
+                    } else {
+                        voice.speaker->audio = minitts::cli::read_audio_buffer(candidate);
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
     if (const auto * value = body.find("voice"); value != nullptr && !voice_field_is_preset) {
-        if (!voice.speaker.has_value()) {
-            voice.speaker = engine::runtime::VoiceReference{};
+        std::string voice_str;
+        if (value->is_string()) {
+            voice_str = value->as_string();
+        } else if (value->is_object()) {
+            if (const auto * id_val = value->find("id"); id_val != nullptr && id_val->is_string()) {
+                voice_str = id_val->as_string();
+            }
         }
-        voice.speaker->cached_voice_id = value->as_string();
-        has_voice = true;
-    }
-    if (const auto * value = body.find("voice_ref")) {
-        if (!voice.speaker.has_value()) {
-            voice.speaker = engine::runtime::VoiceReference{};
+        if (!voice_str.empty()) {
+            if (resolve_voice_file(voice_str)) {
+                has_voice = true;
+            } else {
+                if (!voice.speaker.has_value()) {
+                    voice.speaker = engine::runtime::VoiceReference{};
+                }
+                voice.speaker->cached_voice_id = voice_str;
+                has_voice = true;
+            }
         }
-        voice.speaker->audio = minitts::cli::read_audio_buffer(resolve_path(request_base_, value->as_string()));
-        has_voice = true;
     }
+
+    // Direct path references (voice_ref, ref_wav, ref_embed, speaker_embedding).
+    // Unlike "voice", these name a file outright, so failing to resolve one is a
+    // caller mistake rather than something to fall back from: silently serving
+    // the default speaker here is the hardest kind of bug to notice, because the
+    // request succeeds and only the voice is wrong.
+    auto handle_direct_ref = [&](const char * key) {
+        if (const auto * value = body.find(key)) {
+            if (value->is_string()) {
+                const std::string & requested = value->as_string();
+                if (resolve_voice_file(requested)) {
+                    has_voice = true;
+                } else if (!requested.empty()) {
+                    throw InvalidRequestError(
+                        std::string("could not resolve ") + key + ": \"" + requested +
+                        "\" is not a file relative to " + request_base_.string() +
+                        ", and no <name>{.speaker.safetensors,.safetensors,.wav}"
+                        " matched under " + (request_base_ / "voices").string() +
+                        " or " + request_base_.string());
+                }
+            }
+        }
+    };
+
+    handle_direct_ref("voice_ref");
+    handle_direct_ref("ref_wav");
+    handle_direct_ref("ref_embed");
+    handle_direct_ref("speaker_embedding");
+
     if (const auto * value = body.find("reference_text")) {
         request.options["reference_text"] = value->as_string();
     }
