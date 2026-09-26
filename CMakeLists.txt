@@ -1,3 +1,4 @@
+# Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 cmake_minimum_required(VERSION 3.20)
 
 project(AudioCpp LANGUAGES C CXX)
@@ -12,6 +13,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+if (MSVC)
+    add_compile_options($<$<COMPILE_LANGUAGE:C>:/utf-8> $<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
+endif()
 
 option(AUDIOCPP_DEPLOYMENT_BUILD
     "Compile model specs into the runtime for self-contained deployments"
@@ -260,6 +264,41 @@ if (ENGINE_ENABLE_CUDA AND NOT ENGINE_ENABLE_HIP)
         endif()
     endif()
 
+    # MSVC ships new toolsets faster than CUDA lists them as supported, and nvcc
+    # then refuses to run at all (MSVC 14.51 against CUDA 12.8 here). Getting a
+    # build out needs a handful of nvcc flags plus a force-included header that
+    # relaxes the MSVC STL's own version gates.
+    #
+    # Keeping this in CMakeLists rather than in an NVCC_PREPEND_FLAGS
+    # environment variable (which would have to carry an absolute path to the
+    # header) makes the build self-contained: a clean checkout anywhere picks it
+    # up.
+    #
+    # These have to be set before enable_language(CUDA): CMake compiles a probe
+    # to identify the CUDA compiler, and without -allow-unsupported-compiler that
+    # probe is what fails first.
+    if (MSVC)
+        set(AUDIOCPP_CUDA_MSVC_COMPAT_HEADER
+            "${CMAKE_CURRENT_SOURCE_DIR}/include/cuda_msvc_compat.h")
+        if (AUDIOCPP_CUDA_MSVC_COMPAT_HEADER MATCHES " ")
+            # nvcc splits --compiler-options on commas and the shell on spaces;
+            # neither survives a path with a space in it.
+            message(FATAL_ERROR
+                "The CUDA/MSVC compatibility header path contains a space, which "
+                "nvcc cannot forward to the host compiler: "
+                "${AUDIOCPP_CUDA_MSVC_COMPAT_HEADER}. Build from a path without "
+                "spaces.")
+        endif()
+        string(APPEND CMAKE_CUDA_FLAGS
+            " -allow-unsupported-compiler"
+            " -D_ALLOW_KEYWORD_MACROS"
+            " -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH"
+            " -D_ENABLE_EXTENDED_ALIGNED_STORAGE"
+            " -D_HAS_DEPRECATED_RESULT_OF=1"
+            " --compiler-options /FI${AUDIOCPP_CUDA_MSVC_COMPAT_HEADER},/D_ALLOW_KEYWORD_MACROS")
+        message(STATUS
+            "CUDA/MSVC compatibility: force-including ${AUDIOCPP_CUDA_MSVC_COMPAT_HEADER}")
+    endif()
     enable_language(CUDA)
 
     # Upgrade plain 12X (user value or resolved "native") to 12Xa (Blackwell).
