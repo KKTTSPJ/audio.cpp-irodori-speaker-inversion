@@ -312,6 +312,12 @@ engine::runtime::TaskRequest build_request_from_json(
         if (const auto duration_scale = json_optional_float(*irodori_val, "duration_scale")) {
             overwrite_option(request.options, "duration_scale", std::to_string(*duration_scale));
         }
+        if (const auto normalize_db = json_optional_float(*irodori_val, "normalize_db")) {
+            overwrite_option(request.options, "normalize_db", std::to_string(*normalize_db));
+        }
+        if (const auto volume = json_optional_float(*irodori_val, "volume")) {
+            overwrite_option(request.options, "volume", std::to_string(*volume));
+        }
         overwrite_option_from_json_field(request.options, *irodori_val, "seed", "seed");
     }
 
@@ -326,6 +332,12 @@ engine::runtime::TaskRequest build_request_from_json(
     }
     if (const auto num_steps = json_optional_float(value, "num_steps")) {
         overwrite_option(request.options, "num_inference_steps", std::to_string(static_cast<int>(*num_steps)));
+    }
+    if (const auto normalize_db = json_optional_float(value, "normalize_db")) {
+        overwrite_option(request.options, "normalize_db", std::to_string(*normalize_db));
+    }
+    if (const auto volume = json_optional_float(value, "volume")) {
+        overwrite_option(request.options, "volume", std::to_string(*volume));
     }
     if (const auto repaint_start = json_optional_float(value, "repaint_start")) {
         set_option(request.options, "repainting_start", std::to_string(*repaint_start));
