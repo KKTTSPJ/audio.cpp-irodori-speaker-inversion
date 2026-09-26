@@ -374,6 +374,7 @@ add_library(engine_core OBJECT
     src/framework/audio/waveform_ops.cpp
     src/framework/audio/wav_reader.cpp
     src/framework/audio/wav_writer.cpp
+    src/framework/runtime/post_process.cpp
     src/framework/audio/zipenhancer.cpp
     src/framework/modules/speaker_encoders/ecapa_tdnn_runtime.cpp
     src/framework/modules/speaker_encoders/titanet_runtime.cpp
@@ -1542,6 +1543,13 @@ if (ENGINE_BUILD_TESTS)
     add_test(
         NAME text_normalization_test
         COMMAND text_normalization_test
+    )
+
+    add_engine_unittest(audio_post_process_test tests/unittests/test_audio_post_process.cpp)
+
+    add_test(
+        NAME audio_post_process_test
+        COMMAND audio_post_process_test
     )
 
     add_engine_unittest(outetts_generation_budget_test tests/unittests/test_outetts_generation_budget.cpp)

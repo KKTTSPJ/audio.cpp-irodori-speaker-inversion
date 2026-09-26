@@ -10,6 +10,8 @@
 
 #include "engine/framework/debug/trace.h"
 #include "engine/framework/io/json.h"
+#include "engine/framework/runtime/options.h"
+#include "engine/framework/runtime/post_process.h"
 #include "engine/framework/runtime/registry.h"
 
 #include <algorithm>
@@ -875,6 +877,8 @@ engine::runtime::TaskRequest ServerState::build_speech_request(const LoadedModel
         add_option_from_json(request.options, *irodori_obj, "seconds", "duration_seconds");
         add_option_from_json(request.options, *irodori_obj, "duration_seconds", "duration_seconds");
         add_option_from_json(request.options, *irodori_obj, "duration_scale", "duration_scale");
+        add_option_from_json(request.options, *irodori_obj, "normalize_db", "normalize_db");
+        add_option_from_json(request.options, *irodori_obj, "volume", "volume");
     }
 
     // 2. Process top-level options & flat key aliases
@@ -893,6 +897,8 @@ engine::runtime::TaskRequest ServerState::build_speech_request(const LoadedModel
     add_option_from_json(request.options, body, "duration_scale", "duration_scale");
     add_option_from_json(request.options, body, "cfg_scale_text", "text_guidance_scale");
     add_option_from_json(request.options, body, "cfg_scale_speaker", "speaker_guidance_scale");
+    add_option_from_json(request.options, body, "normalize_db", "normalize_db");
+    add_option_from_json(request.options, body, "volume", "volume");
 
     // 3. Process OpenAI 'speed' -> 'duration_scale' conversion (speed > 1.0 means faster -> duration_scale < 1.0)
     if (const auto * speed_val = body.find("speed"); speed_val != nullptr && speed_val->is_number()) {
@@ -1064,8 +1070,22 @@ ServerState::TimedTaskResult ServerState::run_model(
         throw std::runtime_error("configured model does not provide offline execution: " + model.config.id);
     }
     const auto started = Clock::now();
-    model.session->prepare(engine::runtime::build_preparation_request(request));
-    auto result = model.offline->run(request);
+    // Copied because these two options have to come out of the map before the
+    // session sees it: a schema-v1 session rejects every request option its
+    // model spec does not declare, and normalize_db / volume are ours.
+    engine::runtime::TaskRequest model_request = request;
+    const auto post_opts =
+        engine::framework::runtime::take_audio_post_process_options(model_request.options);
+    model.session->prepare(engine::runtime::build_preparation_request(model_request));
+    auto result = model.offline->run(model_request);
+
+    if (result.audio_output.has_value()) {
+        engine::framework::runtime::apply_audio_post_process(*result.audio_output, post_opts);
+    }
+    for (auto & named : result.named_audio_outputs) {
+        engine::framework::runtime::apply_audio_post_process(named.audio, post_opts);
+    }
+
     return TimedTaskResult{std::move(result), elapsed_ms(started), std::nullopt};
 }
 
