@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "engine/models/irodori_tts/rf_dit.h"
 
 #include "engine/framework/core/backend_weight_store.h"
@@ -1291,6 +1292,12 @@ public:
           1, static_cast<int64_t>(seconds * assets_->codec.sample_rate));
       shape.latent_steps = (shape.target_samples + hop_length - 1) / hop_length;
     } else {
+      if (!request.conditions->predicted_log_frames_valid) {
+        throw std::runtime_error(
+            "Irodori-TTS model has no duration_predictor weights, so the "
+            "utterance length cannot be predicted; pass an explicit duration "
+            "(duration_seconds / seconds, or --duration-seconds on the CLI)");
+      }
       const float pred_frames =
           std::expm1(request.conditions->predicted_log_frames);
       const float scaled_frames =

@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "engine/models/irodori_tts/assets.h"
 
 #include "engine/framework/model_spec/package.h"
@@ -237,9 +238,11 @@ void validate_model_weights(const IrodoriModelConfig & config, const assets::Ten
             {3 * config.duration_hidden_dim, config.caption_dim_resolved()});
     }
     if (config.use_duration_predictor) {
-        assets::require_tensor_shape(source, "duration_predictor.token_input_proj.weight", {config.duration_hidden_dim, config.text_dim});
-        assets::require_tensor_shape(source, "duration_predictor.token_out_proj.weight", {1, config.duration_hidden_dim});
-        assets::require_tensor_shape(source, "duration_predictor.token_out_proj.bias", {1});
+        if (source.has_tensor("duration_predictor.token_input_proj.weight")) {
+            assets::require_tensor_shape(source, "duration_predictor.token_input_proj.weight", {config.duration_hidden_dim, config.text_dim});
+            assets::require_tensor_shape(source, "duration_predictor.token_out_proj.weight", {1, config.duration_hidden_dim});
+            assets::require_tensor_shape(source, "duration_predictor.token_out_proj.bias", {1});
+        }
     }
 }
 

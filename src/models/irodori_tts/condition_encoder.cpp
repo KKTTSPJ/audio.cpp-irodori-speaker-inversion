@@ -549,8 +549,15 @@ IrodoriConditionEncoderWeights load_irodori_condition_encoder_weights(
   weights.speaker_norm = weights.store->load_f32_tensor(
       source, "speaker_norm.weight", {config.speaker_dim});
 
-  weights.duration.null_speaker = weights.store->load_f32_tensor(
-      source, "duration_predictor.null_speaker", {config.speaker_dim});
+  if (source.has_tensor("duration_predictor.null_speaker")) {
+    weights.duration.null_speaker = weights.store->load_f32_tensor(
+        source, "duration_predictor.null_speaker", {config.speaker_dim});
+  } else {
+    std::vector<float> zeros(static_cast<size_t>(config.speaker_dim), 0.0F);
+    weights.duration.null_speaker = weights.store->make_tensor(
+        core::TensorShape::from_dims({config.speaker_dim}), GGML_TYPE_F32,
+        zeros.data(), zeros.size() * sizeof(float));
+  }
   if (config.use_caption_condition) {
     if (config.use_pretrained_text_encoder()) {
       weights.caption_projector = load_pretrained_projector(
@@ -578,23 +585,25 @@ IrodoriConditionEncoderWeights load_irodori_condition_encoder_weights(
         source, "duration_predictor.null_caption",
         {config.caption_dim_resolved()});
   }
-  weights.duration.token_input_proj = load_linear(
-      *weights.store, source, "duration_predictor.token_input_proj",
-      weight_storage_type, config.duration_hidden_dim, config.text_dim, true);
-  weights.duration.token_blocks.reserve(
-      static_cast<size_t>(config.duration_layers));
-  for (int64_t layer = 0; layer < config.duration_layers; ++layer) {
-    weights.duration.token_blocks.push_back(load_duration_block(
-        *weights.store, source,
-        "duration_predictor.token_blocks." + std::to_string(layer),
-        weight_storage_type, config));
+  if (source.has_tensor("duration_predictor.token_input_proj.weight")) {
+    weights.duration.token_input_proj = load_linear(
+        *weights.store, source, "duration_predictor.token_input_proj",
+        weight_storage_type, config.duration_hidden_dim, config.text_dim, true);
+    weights.duration.token_blocks.reserve(
+        static_cast<size_t>(config.duration_layers));
+    for (int64_t layer = 0; layer < config.duration_layers; ++layer) {
+      weights.duration.token_blocks.push_back(load_duration_block(
+          *weights.store, source,
+          "duration_predictor.token_blocks." + std::to_string(layer),
+          weight_storage_type, config));
+    }
+    weights.duration.token_out_norm = weights.store->load_f32_tensor(
+        source, "duration_predictor.token_out_norm.weight",
+        {config.duration_hidden_dim});
+    weights.duration.token_out_proj =
+        load_linear(*weights.store, source, "duration_predictor.token_out_proj",
+                    weight_storage_type, 1, config.duration_hidden_dim, true);
   }
-  weights.duration.token_out_norm = weights.store->load_f32_tensor(
-      source, "duration_predictor.token_out_norm.weight",
-      {config.duration_hidden_dim});
-  weights.duration.token_out_proj =
-      load_linear(*weights.store, source, "duration_predictor.token_out_proj",
-                  weight_storage_type, 1, config.duration_hidden_dim, true);
   weights.store->upload();
   return weights;
 }
@@ -855,6 +864,10 @@ core::TensorValue build_irodori_duration_predictor(
     const core::TensorValue &caption_mask, const core::TensorValue &has_caption,
     const IrodoriConditionEncoderWeights &weights,
     const IrodoriModelConfig &config) {
+  if (weights.duration.token_input_proj.weight.tensor == nullptr) {
+    return core::wrap_tensor(ggml_new_tensor_1d(ctx.ggml, GGML_TYPE_F32, 1),
+                              core::TensorShape::from_dims({1}), GGML_TYPE_F32);
+  }
   auto speaker_vec = select_speaker_vec(ctx, speaker_state, has_speaker,
                                         weights.duration.null_speaker);
   core::TensorValue caption_vec;
@@ -1457,8 +1470,16 @@ private:
       if (config.use_caption_condition) {
         output.caption_state = core::read_tensor_f32(output_caption_.tensor);
       }
-      const auto duration = core::read_tensor_f32(output_duration_.tensor);
-      output.predicted_log_frames = duration.empty() ? 0.0F : duration.front();
+      // Without duration_predictor weights, build_irodori_duration_predictor
+      // emits a 1-element placeholder that no node ever writes to. Reading it
+      // would hand uninitialized memory to expm1() and produce a random
+      // utterance length, so leave the field at its default and flag it.
+      if (owner_->weights_.duration.token_input_proj.weight.tensor == nullptr) {
+        output.predicted_log_frames_valid = false;
+      } else {
+        const auto duration = core::read_tensor_f32(output_duration_.tensor);
+        output.predicted_log_frames = duration.empty() ? 0.0F : duration.front();
+      }
       return output;
     }
 
