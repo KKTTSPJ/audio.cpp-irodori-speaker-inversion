@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "engine/models/irodori_tts/session.h"
 
 #include "engine/framework/debug/profiler.h"
@@ -8,12 +9,17 @@
 #include "engine/models/irodori_tts/condition_encoder.h"
 #include "engine/models/irodori_tts/rf_dit.h"
 
+#include "engine/framework/io/safetensors.h"
+
+#include <ggml.h>
+
 #include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
 #include <limits>
 #include <stdexcept>
 #include <string_view>
@@ -23,6 +29,95 @@
 
 namespace engine::models::irodori_tts {
 namespace {
+
+std::vector<float> load_speaker_embedding_from_file(const std::filesystem::path &path) {
+  if (path.extension() == ".safetensors") {
+    auto index = engine::io::load_safetensors_index(path);
+    if (index.tensors.empty()) {
+      throw std::runtime_error("No tensors found in safetensors file: " + path.string());
+    }
+    // SafeTensorIndex::tensors is an unordered_map, so falling back to
+    // tensors.begin() would pick whichever name hashed first -- a different
+    // tensor on a different build. Require one of the known names instead.
+    auto it = index.tensors.end();
+    for (const char *candidate : {"speaker_state", "speaker_embedding", "embedding", "speaker"}) {
+      if (auto found = index.tensors.find(candidate); found != index.tensors.end()) {
+        it = found;
+        break;
+      }
+    }
+    if (it == index.tensors.end()) {
+      std::string available;
+      for (const auto &entry : index.tensors) {
+        if (!available.empty()) {
+          available += ", ";
+        }
+        available += entry.first;
+      }
+      throw std::runtime_error(
+          "No speaker embedding tensor in " + path.string() +
+          ": expected one of speaker_state, speaker_embedding, embedding, speaker; found " +
+          available);
+    }
+    const auto &info = it->second;
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open()) {
+      throw std::runtime_error("Failed to open safetensors file: " + path.string());
+    }
+    file.seekg(static_cast<std::streamoff>(index.header_bytes + info.data_begin), std::ios::beg);
+    size_t byte_len = info.data_end - info.data_begin;
+    std::vector<char> raw_bytes(byte_len);
+    file.read(raw_bytes.data(), static_cast<std::streamsize>(byte_len));
+    if (static_cast<size_t>(file.gcount()) != byte_len) {
+      throw std::runtime_error(
+          "Truncated safetensors file " + path.string() + ": tensor '" + it->first +
+          "' needs " + std::to_string(byte_len) + " bytes but only " +
+          std::to_string(static_cast<size_t>(file.gcount())) + " were available");
+    }
+
+    std::vector<float> result;
+    if (info.dtype == "F32") {
+      result.resize(byte_len / sizeof(float));
+      std::memcpy(result.data(), raw_bytes.data(), byte_len);
+    } else if (info.dtype == "F16" || info.dtype == "BF16") {
+      const uint16_t *src = reinterpret_cast<const uint16_t *>(raw_bytes.data());
+      size_t count = byte_len / 2;
+      result.resize(count);
+      if (info.dtype == "F16") {
+        // Was hand-rolled, and wrong: the bias was OR-ed onto the exponent
+        // while it still sat in its unshifted bit10..bit14 position, so the
+        // addition could not carry. Every |x| >= 2 came back as roughly
+        // 1/65536 of itself (2.0 -> 3.06e-05) and everything else picked up
+        // the stray exponent bits in its mantissa. ggml already ships the
+        // conversion and the rest of the tree uses it.
+        ggml_fp16_to_fp32_row(reinterpret_cast<const ggml_fp16_t *>(src),
+                              result.data(), static_cast<int64_t>(count));
+      } else {
+        for (size_t i = 0; i < count; ++i) {
+          uint32_t val = static_cast<uint32_t>(src[i]) << 16;
+          float f; std::memcpy(&f, &val, sizeof(f));
+          result[i] = f;
+        }
+      }
+    } else {
+      throw std::runtime_error("Unsupported safetensors dtype: " + info.dtype);
+    }
+    return result;
+  }
+
+  std::ifstream file(path, std::ios::binary | std::ios::ate);
+  if (!file.is_open()) {
+    throw std::runtime_error("Failed to open speaker embedding file: " + path.string());
+  }
+  const auto size = file.tellg();
+  file.seekg(0, std::ios::beg);
+  if (size <= 0 || size % sizeof(float) != 0) {
+    throw std::runtime_error("Invalid speaker embedding file size in " + path.string());
+  }
+  std::vector<float> embedding(static_cast<size_t>(size / sizeof(float)));
+  file.read(reinterpret_cast<char *>(embedding.data()), size);
+  return embedding;
+}
 
 using Clock = std::chrono::steady_clock;
 constexpr const char *kFamily = "irodori_tts";
@@ -464,58 +559,78 @@ IrodoriTTSSession::run(const runtime::TaskRequest &request) {
       no_reference_speaker_condition(assets_->config);
   bool reference_cache_hit = false;
   if (!first_request.no_ref) {
-    if (!first_request.has_reference_audio) {
-      throw std::runtime_error(
-          "Irodori-TTS reference mode requires reference audio");
-    }
-    const ReferenceAudioCacheKey reference_key{
-        reference_audio_cache_key(first_request.reference_audio),
-        first_request.reference_audio.sample_rate,
-        first_request.reference_audio.channels,
-        first_request.reference_audio.samples.size(),
-    };
-    if (const auto *cached = reference_speaker_cache_.find(reference_key)) {
-      reference_cache_hit = true;
-      speaker.state = cached->state;
-      speaker.mask = cached->mask;
-      speaker.tokens = cached->tokens;
-      speaker.has_speaker = cached->has_speaker;
-      debug::trace_log_scalar("irodori_tts.reference_cache.hit", 1);
-      debug::trace_log_scalar(
-          "irodori_tts.reference_cache.slots",
-          static_cast<int64_t>(reference_speaker_cache_.capacity()));
-      debug::trace_log_scalar(
-          "irodori_tts.reference_cache.entries",
-          static_cast<int64_t>(reference_speaker_cache_.size()));
-      debug::trace_log_scalar("irodori_tts.reference_cache.evicted", 0);
-    } else {
-      const bool will_evict = reference_speaker_cache_.capacity() > 0 &&
-                              reference_speaker_cache_.size() >=
-                                  reference_speaker_cache_.capacity();
-      int64_t ref_latent_steps = 0;
-      auto ref_latent = codec_->encode_reference(first_request.reference_audio,
-                                                 ref_latent_steps);
-      speaker = condition_encoder_->encode_speaker_reference(ref_latent,
-                                                             ref_latent_steps);
-      ReferenceSpeakerCacheEntry entry;
-      entry.state = speaker.state;
-      entry.mask = speaker.mask;
-      entry.tokens = speaker.tokens;
-      entry.has_speaker = speaker.has_speaker;
-      reference_speaker_cache_.put(reference_key, std::move(entry));
-      if (mem_saver_) {
-        codec_->release_graphs();
-        condition_encoder_->release_graphs();
+    if (first_request.speaker_embedding.has_value() ||
+        first_request.speaker_embedding_path.has_value()) {
+      if (first_request.speaker_embedding.has_value()) {
+        speaker.state = *first_request.speaker_embedding;
+      } else {
+        speaker.state = load_speaker_embedding_from_file(
+            *first_request.speaker_embedding_path);
       }
-      debug::trace_log_scalar("irodori_tts.reference_cache.hit", 0);
-      debug::trace_log_scalar(
-          "irodori_tts.reference_cache.slots",
-          static_cast<int64_t>(reference_speaker_cache_.capacity()));
-      debug::trace_log_scalar(
-          "irodori_tts.reference_cache.entries",
-          static_cast<int64_t>(reference_speaker_cache_.size()));
-      debug::trace_log_scalar("irodori_tts.reference_cache.evicted",
-                              will_evict ? 1 : 0);
+      const int64_t speaker_dim = assets_->config.speaker_dim;
+      speaker.tokens =
+          static_cast<int64_t>(speaker.state.size()) / speaker_dim;
+      if (speaker.tokens <= 0 ||
+          static_cast<int64_t>(speaker.state.size()) !=
+              speaker.tokens * speaker_dim) {
+        throw std::runtime_error("Invalid speaker embedding dimensions");
+      }
+      speaker.mask.assign(static_cast<size_t>(speaker.tokens), 1);
+      speaker.has_speaker = true;
+    } else {
+      if (!first_request.has_reference_audio) {
+        throw std::runtime_error(
+            "Irodori-TTS reference mode requires reference audio or speaker embedding");
+      }
+      const ReferenceAudioCacheKey reference_key{
+          reference_audio_cache_key(first_request.reference_audio),
+          first_request.reference_audio.sample_rate,
+          first_request.reference_audio.channels,
+          first_request.reference_audio.samples.size(),
+      };
+      if (const auto *cached = reference_speaker_cache_.find(reference_key)) {
+        reference_cache_hit = true;
+        speaker.state = cached->state;
+        speaker.mask = cached->mask;
+        speaker.tokens = cached->tokens;
+        speaker.has_speaker = cached->has_speaker;
+        debug::trace_log_scalar("irodori_tts.reference_cache.hit", 1);
+        debug::trace_log_scalar(
+            "irodori_tts.reference_cache.slots",
+            static_cast<int64_t>(reference_speaker_cache_.capacity()));
+        debug::trace_log_scalar(
+            "irodori_tts.reference_cache.entries",
+            static_cast<int64_t>(reference_speaker_cache_.size()));
+        debug::trace_log_scalar("irodori_tts.reference_cache.evicted", 0);
+      } else {
+        const bool will_evict = reference_speaker_cache_.capacity() > 0 &&
+                                reference_speaker_cache_.size() >=
+                                    reference_speaker_cache_.capacity();
+        int64_t ref_latent_steps = 0;
+        auto ref_latent = codec_->encode_reference(first_request.reference_audio,
+                                                    ref_latent_steps);
+        speaker = condition_encoder_->encode_speaker_reference(ref_latent,
+                                                               ref_latent_steps);
+        ReferenceSpeakerCacheEntry entry;
+        entry.state = speaker.state;
+        entry.mask = speaker.mask;
+        entry.tokens = speaker.tokens;
+        entry.has_speaker = speaker.has_speaker;
+        reference_speaker_cache_.put(reference_key, std::move(entry));
+        if (mem_saver_) {
+          codec_->release_graphs();
+          condition_encoder_->release_graphs();
+        }
+        debug::trace_log_scalar("irodori_tts.reference_cache.hit", 0);
+        debug::trace_log_scalar(
+            "irodori_tts.reference_cache.slots",
+            static_cast<int64_t>(reference_speaker_cache_.capacity()));
+        debug::trace_log_scalar(
+            "irodori_tts.reference_cache.entries",
+            static_cast<int64_t>(reference_speaker_cache_.size()));
+        debug::trace_log_scalar("irodori_tts.reference_cache.evicted",
+                                will_evict ? 1 : 0);
+      }
     }
   }
   const auto reference_end = Clock::now();
@@ -650,11 +765,20 @@ IrodoriTTSSession::make_request(const runtime::TaskRequest &request) const {
   if (const auto value = runtime::find_option(request.options, {"no_ref"})) {
     out.no_ref = runtime::parse_bool_option(*value, "no_ref");
   }
-  if (request.voice.has_value() && request.voice->speaker.has_value() &&
-      request.voice->speaker->audio.has_value()) {
-    out.reference_audio = *request.voice->speaker->audio;
-    out.has_reference_audio = true;
-    out.no_ref = false;
+  if (request.voice.has_value() && request.voice->speaker.has_value()) {
+    if (request.voice->speaker->speaker_embedding.has_value()) {
+      out.speaker_embedding = request.voice->speaker->speaker_embedding;
+      out.no_ref = false;
+    }
+    if (request.voice->speaker->speaker_embedding_path.has_value()) {
+      out.speaker_embedding_path = request.voice->speaker->speaker_embedding_path;
+      out.no_ref = false;
+    }
+    if (request.voice->speaker->audio.has_value()) {
+      out.reference_audio = *request.voice->speaker->audio;
+      out.has_reference_audio = true;
+      out.no_ref = false;
+    }
   } else if (request.audio_input.has_value()) {
     out.reference_audio = *request.audio_input;
     out.has_reference_audio = true;

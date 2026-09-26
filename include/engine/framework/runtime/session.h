@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #pragma once
 
 #include "engine/framework/core/backend.h"
@@ -5,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <initializer_list>
 #include <optional>
@@ -110,6 +112,8 @@ struct WordTimestamp {
 struct VoiceReference {
     std::optional<AudioBuffer> audio = std::nullopt;
     std::optional<std::string> cached_voice_id = std::nullopt;
+    std::optional<std::vector<float>> speaker_embedding = std::nullopt;
+    std::optional<std::filesystem::path> speaker_embedding_path = std::nullopt;
 };
 
 struct StyleCondition {

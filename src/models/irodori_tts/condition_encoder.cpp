@@ -1050,10 +1050,15 @@ std::vector<float>
 duration_speaker_state(const IrodoriSpeakerCondition &speaker,
                        int64_t speaker_dim) {
   std::vector<float> out(static_cast<size_t>(2 * speaker_dim), 0.0F);
-  if (!speaker.state.empty()) {
+  if (static_cast<int64_t>(speaker.state.size()) >= 2 * speaker_dim) {
     std::copy(speaker.state.begin(),
-              speaker.state.begin() + static_cast<std::ptrdiff_t>(speaker_dim),
+              speaker.state.begin() +
+                  static_cast<std::ptrdiff_t>(2 * speaker_dim),
               out.begin());
+  } else if (!speaker.state.empty()) {
+    const size_t copy_len = std::min(speaker.state.size(), static_cast<size_t>(speaker_dim));
+    std::copy(speaker.state.begin(), speaker.state.begin() + copy_len, out.begin());
+    std::copy(speaker.state.begin(), speaker.state.begin() + copy_len, out.begin() + speaker_dim);
   }
   return out;
 }
