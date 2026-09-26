@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "engine/models/irodori_tts/rf_dit.h"
 
 #include "engine/framework/core/backend_weight_store.h"
@@ -1226,6 +1227,11 @@ private:
           first_branch_outputs_.push_back(first);
         }
       }
+      ggml_set_output(text_state_.tensor);
+      ggml_set_output(speaker_state_.tensor);
+      if (config.use_caption_condition && caption_tokens_ > 0) {
+        ggml_set_output(caption_state_.tensor);
+      }
       for (auto &layer : outputs_) {
         ggml_set_output(layer.k_context.tensor);
         ggml_set_output(layer.v_context.tensor);
@@ -1235,7 +1241,12 @@ private:
         ggml_build_forward_expand(graph_, layer.k_context.tensor);
         ggml_build_forward_expand(graph_, layer.v_context.tensor);
       }
-      buffer_ = ggml_backend_alloc_ctx_tensors(ctx_.get(), owner.backend_);
+      ggml_build_forward_expand(graph_, text_state_.tensor);
+      ggml_build_forward_expand(graph_, speaker_state_.tensor);
+      if (config.use_caption_condition && caption_tokens_ > 0) {
+        ggml_build_forward_expand(graph_, caption_state_.tensor);
+      }
+      buffer_ = ggml_backend_alloc_ctx_tensors_from_buft(ctx_.get(), ggml_backend_get_default_buffer_type(owner.backend_));
       if (buffer_ == nullptr) {
         throw std::runtime_error(
             "failed to allocate Irodori-TTS RF context graph");
@@ -1752,11 +1763,21 @@ private:
       outputs_ = build_irodori_context_kv_cache(build_ctx, text_state_,
                                                 speaker_state_, caption_state_,
                                                 owner.weights_, config);
+      ggml_set_output(text_state_.tensor);
+      ggml_set_output(speaker_state_.tensor);
+      if (config.use_caption_condition && caption_tokens_ > 0) {
+        ggml_set_output(caption_state_.tensor);
+      }
       for (auto &layer : outputs_) {
         ggml_set_output(layer.k_context.tensor);
         ggml_set_output(layer.v_context.tensor);
       }
       graph_ = ggml_new_graph_custom(ctx_.get(), 131072, false);
+      ggml_build_forward_expand(graph_, text_state_.tensor);
+      ggml_build_forward_expand(graph_, speaker_state_.tensor);
+      if (config.use_caption_condition && caption_tokens_ > 0) {
+        ggml_build_forward_expand(graph_, caption_state_.tensor);
+      }
       for (auto &layer : outputs_) {
         ggml_build_forward_expand(graph_, layer.k_context.tensor);
         ggml_build_forward_expand(graph_, layer.v_context.tensor);

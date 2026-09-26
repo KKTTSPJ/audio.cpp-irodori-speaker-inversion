@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "engine/models/irodori_tts/condition_encoder.h"
 
 #include "engine/framework/core/backend_weight_store.h"
@@ -1353,6 +1354,12 @@ private:
         ggml_build_forward_expand(graph_, output_caption_.tensor);
       }
       ggml_build_forward_expand(graph_, output_duration_.tensor);
+      buffer_ = ggml_backend_alloc_ctx_tensors_from_buft(
+          ctx_.get(), ggml_backend_get_default_buffer_type(owner.backend_));
+      if (buffer_ == nullptr) {
+        throw std::runtime_error(
+            "failed to allocate Irodori-TTS condition context tensors");
+      }
       gallocr_ = ggml_gallocr_new(
           ggml_backend_get_default_buffer_type(owner.backend_));
       if (gallocr_ == nullptr || !ggml_gallocr_reserve(gallocr_, graph_) ||
@@ -1379,6 +1386,9 @@ private:
       engine::core::release_backend_graph_resources(owner_->backend_, graph_);
       if (gallocr_ != nullptr) {
         ggml_gallocr_free(gallocr_);
+      }
+      if (buffer_ != nullptr) {
+        ggml_backend_buffer_free(buffer_);
       }
     }
 
@@ -1474,6 +1484,7 @@ private:
     core::TensorValue output_duration_;
     ggml_cgraph *graph_ = nullptr;
     ggml_gallocr_t gallocr_ = nullptr;
+    ggml_backend_buffer_t buffer_ = nullptr;
   };
 
   std::shared_ptr<const IrodoriTTSAssets> assets_;
