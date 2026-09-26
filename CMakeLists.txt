@@ -608,6 +608,7 @@ add_library(engine_core OBJECT
     src/framework/audio/waveform_ops.cpp
     src/framework/audio/wav_reader.cpp
     src/framework/audio/wav_writer.cpp
+    src/framework/runtime/post_process.cpp
     src/framework/audio/utilities/zipenhancer.cpp
     src/framework/runtime/flow_kv_cache.cpp
     src/framework/modules/speaker_encoders/ecapa_tdnn_runtime.cpp
@@ -3017,6 +3018,9 @@ if (ENGINE_BUILD_TESTS OR ENGINE_BUILD_EXTENDED_TESTS OR ENGINE_BUILD_MODEL_TEST
 
         add_engine_unittest(text_normalization_test tests/unittests/test_text_normalization.cpp)
         add_test(NAME text_normalization_test COMMAND text_normalization_test)
+
+        add_engine_unittest(audio_post_process_test tests/unittests/test_audio_post_process.cpp)
+        add_test(NAME audio_post_process_test COMMAND audio_post_process_test)
 
         add_engine_unittest(subtitle_formatter_test tests/unittests/test_subtitle_formatter.cpp)
         add_test(NAME subtitle_formatter_test COMMAND subtitle_formatter_test)

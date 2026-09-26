@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "args.h"
 #include "batch.h"
 #include "partial_render.h"
@@ -14,6 +15,8 @@
 #include "engine/framework/audio/conversion.h"
 #include "engine/framework/debug/trace.h"
 #include "engine/framework/io/json.h"
+#include "engine/framework/runtime/options.h"
+#include "engine/framework/runtime/post_process.h"
 #include "engine/framework/runtime/registry.h"
 #include "engine/framework/runtime/session.h"
 
@@ -954,8 +957,20 @@ int audiocpp_cli_main(int argc, char ** argv) {
             if (offline == nullptr) {
                 throw std::runtime_error("selected task session does not support offline execution");
             }
-            const auto result = offline->run(request);
+            // Must happen before run(): a schema-v1 session rejects request
+            // options its model spec does not declare, and these two are ours.
+            const auto post_opts =
+                engine::framework::runtime::take_audio_post_process_options(request.options);
+            auto result = offline->run(request);
             const double wall_ms = duration_ms(std::chrono::steady_clock::now() - session_start);
+
+            if (result.audio_output.has_value()) {
+                engine::framework::runtime::apply_audio_post_process(*result.audio_output, post_opts);
+            }
+            for (auto & named : result.named_audio_outputs) {
+                engine::framework::runtime::apply_audio_post_process(named.audio, post_opts);
+            }
+
             std::cout << "family=" << session->family() << "\n";
             std::cout << "task=" << engine::runtime::to_string(session->task_kind()) << "\n";
             std::cout << "mode=" << engine::runtime::to_string(session->run_mode()) << "\n";
