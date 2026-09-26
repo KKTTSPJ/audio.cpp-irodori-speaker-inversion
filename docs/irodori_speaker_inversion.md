@@ -45,6 +45,11 @@ reviewed or cherry-picked on its own:
    (`normalize_db`) and gain (`volume`, with a soft limiter), applied by the CLI
    and the server after synthesis, with unit tests.
 7. **docs:** this file.
+8. **fix: post-processing in `--request-sequence` batches** (added after the
+   first publication). Before it, `normalize_db` / `volume` in a
+   `--request-sequence` JSON item failed with
+   `unknown Irodori-TTS request option: normalize_db`; single CLI requests
+   and the server were not affected.
 
 ## Embedding file format
 
@@ -114,7 +119,7 @@ Resolution failures behave differently depending on the field:
 ## Request field reference
 
 These apply to the server request body and, with the exceptions noted below,
-to the CLI's JSON request files. The aliases follow the request format of
+to the CLI's JSON request files (`--request-sequence`). The aliases follow the request format of
 [Irodori-TTS-Server](https://github.com/Aratako/Irodori-TTS-Server), so an
 existing client can be pointed at audio.cpp with few changes.
 
@@ -209,6 +214,7 @@ one-line notice at the top. The modified files are:
 - `CMakeLists.txt`
 - `app/cli/main.cpp`, `app/cli/request.cpp`
 - `app/server/runtime.cpp`
+- `app/workflow/execution.cpp`
 - `include/engine/framework/runtime/session.h`
 - `include/engine/models/irodori_tts/condition_encoder.h`, `include/engine/models/irodori_tts/types.h`
 - `src/models/irodori_tts/assets.cpp`, `condition_encoder.cpp`, `rf_dit.cpp`, `session.cpp`
