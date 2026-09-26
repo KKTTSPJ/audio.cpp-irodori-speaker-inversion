@@ -1,6 +1,8 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "runtime.h"
 
 #include "base64.h"
+#include "invalid_request.h"
 #include "model_memory.h"
 #include "multipart.h"
 #include "ui_assets.h"
@@ -143,9 +145,12 @@ std::optional<std::string> load_voice_library_text(
     return std::nullopt;
 }
 
-std::optional<std::filesystem::path> resolve_voice_library_wav(
+// `<voice_dir>/<voice_name><suffix>`, when voice_name is a bare entry name (never
+// a path that could leave voice_dir) and the file exists.
+std::optional<std::filesystem::path> resolve_voice_library_file(
     const std::filesystem::path & voice_dir,
-    const std::string & voice_name) {
+    const std::string & voice_name,
+    std::string_view suffix) {
     const std::filesystem::path name_path(voice_name);
     if (voice_name.empty() ||
         name_path.has_root_name() ||
@@ -156,12 +161,58 @@ std::optional<std::filesystem::path> resolve_voice_library_wav(
         voice_name == "..") {
         return std::nullopt;
     }
-    const auto wav = voice_dir / (voice_name + ".wav");
+    const auto file = voice_dir / (voice_name + std::string(suffix));
     std::error_code ec;
-    if (!std::filesystem::is_regular_file(wav, ec)) {
+    if (!std::filesystem::is_regular_file(file, ec)) {
         return std::nullopt;
     }
-    return wav;
+    return file;
+}
+
+std::optional<std::filesystem::path> resolve_voice_library_wav(
+    const std::filesystem::path & voice_dir,
+    const std::string & voice_name) {
+    return resolve_voice_library_file(voice_dir, voice_name, ".wav");
+}
+
+// A Speaker Inversion embedding in the voice library: <name>.speaker.safetensors
+// (what Irodori-TTS writes) or <name>.safetensors.
+std::optional<std::filesystem::path> resolve_voice_library_embedding(
+    const std::filesystem::path & voice_dir,
+    const std::string & voice_name) {
+    for (const std::string_view suffix : {".speaker.safetensors", ".safetensors"}) {
+        if (auto file = resolve_voice_library_file(voice_dir, voice_name, suffix)) {
+            return file;
+        }
+    }
+    return std::nullopt;
+}
+
+bool is_speaker_embedding_file(const std::filesystem::path & path) {
+    auto extension = path.extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return extension == ".safetensors";
+}
+
+// Fields that name a speaker file outright: upstream's voice_ref plus the
+// Irodori-TTS-Server compatible aliases.
+bool has_direct_voice_reference(const engine::io::json::Value & body) {
+    for (const char * key : {"voice_ref", "ref_wav", "ref_embed", "speaker_embedding"}) {
+        if (body.find(key) != nullptr) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// "voice" is a name, or an object carrying it as {"id": "<name>"}.
+std::string voice_field_name(const engine::io::json::Value & value) {
+    if (value.is_object()) {
+        return engine::io::json::require_string(value, "id");
+    }
+    return value.as_string();
 }
 
 std::unordered_map<std::string, std::string> options_from_object(const Value * value);
@@ -1279,6 +1330,11 @@ HttpResponse ServerState::handle_request(const HttpRequest & request, bool use_f
     // sent. (Streaming requests acquire the lock inside the stream body, after
     // headers are sent, so there it becomes a stream error event instead.)
     response = error_response(503, ex.what(), "server_busy");
+  } catch (const InvalidRequestError & ex) {
+    // The caller asked for something impossible (e.g. an unresolvable voice
+    // reference). Anything else still falls through to the 500 handler in
+    // http.cpp.
+    response = error_response(400, ex.what(), "invalid_request_error");
   }
   if (!allowed_origin.empty()) {
       response.headers["Access-Control-Allow-Origin"] = allowed_origin;
@@ -1999,14 +2055,14 @@ const ServerState::LoadedModel::RuntimeVoicePreset * ServerState::select_voice_p
     bool & voice_field_is_preset) const {
     voice_field_is_preset = false;
     if (const auto * value = body.find("voice")) {
-        const auto it = model.voice_presets.find(value->as_string());
+        const auto it = model.voice_presets.find(voice_field_name(*value));
         if (it != model.voice_presets.end()) {
             voice_field_is_preset = true;
             return &it->second;
         }
         return nullptr;
     }
-    if (body.find("voice_ref") != nullptr) {
+    if (has_direct_voice_reference(body)) {
         return nullptr;
     }
     return model.default_voice_preset.has_value() ? &*model.default_voice_preset : nullptr;
@@ -2021,6 +2077,20 @@ engine::runtime::TaskRequest ServerState::build_speech_request(const LoadedModel
     };
 
     request.options = options_from_object(body.find("options"));
+
+    // 1. Process nested "irodori" options if present
+    if (const auto * irodori_obj = body.find("irodori"); irodori_obj != nullptr && irodori_obj->is_object()) {
+        add_option_from_json(request.options, *irodori_obj, "num_steps", "num_inference_steps");
+        add_option_from_json(request.options, *irodori_obj, "num_inference_steps", "num_inference_steps");
+        add_option_from_json(request.options, *irodori_obj, "seed", "seed");
+        add_option_from_json(request.options, *irodori_obj, "cfg_scale_text", "text_guidance_scale");
+        add_option_from_json(request.options, *irodori_obj, "cfg_scale_speaker", "speaker_guidance_scale");
+        add_option_from_json(request.options, *irodori_obj, "seconds", "duration_seconds");
+        add_option_from_json(request.options, *irodori_obj, "duration_seconds", "duration_seconds");
+        add_option_from_json(request.options, *irodori_obj, "duration_scale", "duration_scale");
+    }
+
+    // 2. Process top-level options & flat key aliases
     add_option_from_json(request.options, body, "seed", "seed");
     add_option_from_json(request.options, body, "temperature", "temperature");
     add_option_from_json(request.options, body, "top_k", "top_k");
@@ -2030,6 +2100,14 @@ engine::runtime::TaskRequest ServerState::build_speech_request(const LoadedModel
     add_option_from_json(request.options, body, "repetition_penalty", "repetition_penalty");
     add_option_from_json(request.options, body, "guidance_scale", "guidance_scale");
     add_option_from_json(request.options, body, "num_inference_steps", "num_inference_steps");
+    add_option_from_json(request.options, body, "num_steps", "num_inference_steps");
+    add_option_from_json(request.options, body, "seconds", "duration_seconds");
+    add_option_from_json(request.options, body, "duration_seconds", "duration_seconds");
+    add_option_from_json(request.options, body, "duration_scale", "duration_scale");
+    add_option_from_json(request.options, body, "cfg_scale_text", "text_guidance_scale");
+    add_option_from_json(request.options, body, "cfg_scale_speaker", "speaker_guidance_scale");
+
+
     if (const auto * value = body.find("instructions")) {
         request.options["instruction"] = value->as_string();
     }
@@ -2062,15 +2140,34 @@ engine::runtime::TaskRequest ServerState::build_speech_request(const LoadedModel
             request.options["reference_text"] = *preset->reference_text;
         }
     }
-    const bool has_explicit_voice_ref = body.find("voice_ref") != nullptr;
+    const bool has_explicit_voice_ref = has_direct_voice_reference(body);
+    // A resolved speaker file: .safetensors is a Speaker Inversion embedding,
+    // anything else is reference audio.
+    auto use_speaker_file = [&](const std::filesystem::path & path) {
+        if (!voice.speaker.has_value()) {
+            voice.speaker = engine::runtime::VoiceReference{};
+        }
+        if (is_speaker_embedding_file(path)) {
+            voice.speaker->speaker_embedding_path = path;
+        } else {
+            voice.speaker->audio = minitts::cli::read_audio_buffer(path);
+        }
+        has_voice = true;
+    };
     if (const auto * value = body.find("voice"); value != nullptr && !voice_field_is_preset) {
         // Voice library: "voice" may name a wav in the configured voice_dir. When it
         // does, that audio becomes the cloning reference and the transcript from
         // prompt_text is injected unless the request already sets reference_text.
+        // A Speaker Inversion embedding of the same name takes precedence.
+        const std::string voice_name = voice_field_name(*value);
         bool voice_library_resolved = false;
         if (config_.voice_dir.has_value() && !has_explicit_voice_ref) {
-            const std::string voice_name = value->as_string();
-            if (const auto wav = resolve_voice_library_wav(*config_.voice_dir, voice_name)) {
+            if (const auto embedding = resolve_voice_library_embedding(*config_.voice_dir, voice_name)) {
+                voice.speaker = engine::runtime::VoiceReference{};
+                voice.speaker->speaker_embedding_path = *embedding;
+                has_voice = true;
+                voice_library_resolved = true;
+            } else if (const auto wav = resolve_voice_library_wav(*config_.voice_dir, voice_name)) {
                 voice.speaker = engine::runtime::VoiceReference{};
                 voice.speaker->audio = minitts::cli::read_audio_buffer(*wav);
                 has_voice = true;
@@ -2083,27 +2180,55 @@ engine::runtime::TaskRequest ServerState::build_speech_request(const LoadedModel
                 }
             }
         }
-        // Names that do not resolve to a wav keep the cached_voice_id behavior.
+        // Names that do not resolve to a library entry keep the cached_voice_id behavior.
         if (!voice_library_resolved) {
             if (!voice.speaker.has_value()) {
                 voice.speaker = engine::runtime::VoiceReference{};
             }
-            voice.speaker->cached_voice_id = value->as_string();
+            voice.speaker->cached_voice_id = voice_name;
             has_voice = true;
         }
     }
-    if (const auto * value = body.find("voice_ref")) {
-        if (!voice.speaker.has_value()) {
-            voice.speaker = engine::runtime::VoiceReference{};
+    // voice_ref and its Irodori-TTS-Server aliases name a file outright: a path
+    // relative to the server's working directory, or else a voice library entry.
+    // Failing to resolve one is a caller mistake rather than something to fall
+    // back from -- silently serving another speaker is the hardest kind of bug to
+    // notice, because the request succeeds and only the voice is wrong.
+    auto resolve_direct_ref = [&](const char * key, const std::string & requested) {
+        const auto direct = resolve_path(request_base_, requested);
+        std::error_code ec;
+        if (std::filesystem::is_regular_file(direct, ec)) {
+            return direct;
         }
+        if (config_.voice_dir.has_value()) {
+            if (const auto embedding = resolve_voice_library_embedding(*config_.voice_dir, requested)) {
+                return *embedding;
+            }
+            if (const auto wav = resolve_voice_library_wav(*config_.voice_dir, requested)) {
+                return *wav;
+            }
+        }
+        throw InvalidRequestError(
+            std::string("could not resolve ") + key + ": \"" + requested +
+            "\" is not a file relative to " + request_base_.string() +
+            (config_.voice_dir.has_value()
+                ? ", and no <name>{.speaker.safetensors,.safetensors,.wav} matched in the voice library " +
+                      config_.voice_dir->string()
+                : std::string(", and no voice library (--voice-dir) is configured")));
+    };
+    if (const auto * value = body.find("voice_ref")) {
         if (value->is_string()) {
-            voice.speaker->audio = minitts::cli::read_audio_buffer(resolve_path(request_base_, value->as_string()));
+            if (!value->as_string().empty()) {
+                use_speaker_file(resolve_direct_ref("voice_ref", value->as_string()));
+            }
         } else if (value->is_object()) {
             const auto & type = engine::io::json::require_string(*value, "type");
             if (type == "path") {
-                voice.speaker->audio = minitts::cli::read_audio_buffer(
-                    resolve_path(request_base_, engine::io::json::require_string(*value, "path")));
+                use_speaker_file(resolve_direct_ref("voice_ref", engine::io::json::require_string(*value, "path")));
             } else if (type == "base64") {
+                if (!voice.speaker.has_value()) {
+                    voice.speaker = engine::runtime::VoiceReference{};
+                }
                 // Bound the inline reference audio so a huge base64 payload cannot
                 // blow up host RAM through decode + f32 expansion (~3x its size).
                 constexpr size_t kMaxVoiceRefBytes = size_t{5} * 1024 * 1024;
@@ -2122,14 +2247,25 @@ engine::runtime::TaskRequest ServerState::build_speech_request(const LoadedModel
                 }
                 voice.speaker->audio = minitts::cli::read_audio_buffer(
                     std::string_view(reinterpret_cast<const char *>(bytes.data()), bytes.size()));
+                has_voice = true;
             } else {
                 throw std::runtime_error("voice_ref type must be \"path\" or \"base64\"");
             }
         } else {
             throw std::runtime_error("voice_ref must be a path string or an object with type \"path\" or \"base64\"");
         }
-        has_voice = true;
     }
+    for (const char * key : {"ref_wav", "ref_embed", "speaker_embedding"}) {
+        if (const auto * value = body.find(key)) {
+            if (!value->is_string()) {
+                throw InvalidRequestError(std::string(key) + " must be a path string");
+            }
+            if (!value->as_string().empty()) {
+                use_speaker_file(resolve_direct_ref(key, value->as_string()));
+            }
+        }
+    }
+
     if (const auto * value = body.find("reference_text")) {
         request.options["reference_text"] = value->as_string();
     }
