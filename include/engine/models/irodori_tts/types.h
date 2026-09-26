@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #pragma once
 
 #include "engine/framework/runtime/session.h"
@@ -35,6 +36,8 @@ struct IrodoriRequest {
   bool no_ref = true;
   runtime::AudioBuffer reference_audio;
   bool has_reference_audio = false;
+  std::optional<std::vector<float>> speaker_embedding;
+  std::optional<std::filesystem::path> speaker_embedding_path;
   IrodoriGenerationOptions generation;
 };
 
