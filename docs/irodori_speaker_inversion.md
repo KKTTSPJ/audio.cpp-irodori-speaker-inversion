@@ -28,7 +28,9 @@ reviewed or cherry-picked on its own:
    `/utf-8`. Independent of everything else. See
    [Build notes](#build-notes-windows-msvc--cuda).
 2. **fix(irodori): keep condition-encoder context tensors alive.** The
-   condition graph gets a backend buffer for its context tensors.
+   condition graph gets a backend buffer for its context tensors. As first
+   ported this buffer covered the whole graph, costing about 4 GB per request;
+   see [Fixes after v0.8.2](#fixes-after-v082).
 3. **feat(irodori): checkpoints without `duration_predictor` weights.** Those
    weights become optional. When they are missing, automatic duration
    prediction raises a clear error asking for an explicit duration instead of
@@ -45,6 +47,21 @@ reviewed or cherry-picked on its own:
    (single requests and `--request-sequence` batches) and the server after
    synthesis, with unit tests.
 7. **docs:** this file.
+
+### Fixes after v0.8.2
+
+Tag `irodori-speaker-inversion-v0.8.2-r2` adds one fix on top of the commits
+above:
+
+- **fix(irodori): back only leftover condition inputs instead of the whole
+  graph.** Commit 2 allocated every tensor of the condition-encoder context
+  before gallocr ran. That context holds the whole graph, so each request
+  reserved about 4.1 GB (Irodori-TTS v4) for intermediates that gallocr would
+  otherwise reuse, in VRAM on CUDA and in RAM on the CPU backend. On a 12 GB
+  card shared with other programs this ended in `cudaMalloc failed: out of
+  memory`. The buffer is now allocated after gallocr and only for inputs the
+  graph does not reach. Output is bit-identical; the peak for a short v4
+  request drops by about 2.8 GB, and CUDA requests got about twice as fast.
 
 ### Differences from the v0.5.1 branch
 
