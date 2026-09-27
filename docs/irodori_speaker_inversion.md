@@ -61,7 +61,8 @@ above:
   card shared with other programs this ended in `cudaMalloc failed: out of
   memory`. The buffer is now allocated after gallocr and only for inputs the
   graph does not reach. Output is bit-identical; the peak for a short v4
-  request drops by about 2.8 GB, and CUDA requests got about twice as fast.
+  request drops by about 2.8 GB, and CUDA requests got 3–13% faster
+  (RTX 5060 Ti; the gain is largest for short requests).
 
 ### Differences from the v0.5.1 branch
 
