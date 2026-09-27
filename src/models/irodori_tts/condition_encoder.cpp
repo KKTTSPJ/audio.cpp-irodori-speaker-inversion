@@ -1372,18 +1372,26 @@ private:
         ggml_build_forward_expand(graph_, output_caption_.tensor);
       }
       ggml_build_forward_expand(graph_, output_duration_.tensor);
-      buffer_ = ggml_backend_alloc_ctx_tensors_from_buft(
-          ctx_.get(), ggml_backend_get_default_buffer_type(owner.backend_));
-      if (buffer_ == nullptr) {
-        throw std::runtime_error(
-            "failed to allocate Irodori-TTS condition context tensors");
-      }
       gallocr_ = ggml_gallocr_new(
           ggml_backend_get_default_buffer_type(owner.backend_));
       if (gallocr_ == nullptr || !ggml_gallocr_reserve(gallocr_, graph_) ||
           !ggml_gallocr_alloc_graph(gallocr_, graph_)) {
         throw std::runtime_error(
             "failed to allocate Irodori-TTS condition graph");
+      }
+      // Inputs that the graph does not reach (speaker_state_ / has_speaker_
+      // when a checkpoint has no duration_predictor weights) get no storage
+      // from gallocr, yet they are still written below and in run(). Back only
+      // those leftovers here. Allocating the context before gallocr would give
+      // every intermediate tensor its own storage (about 4 GB per request for
+      // Irodori-TTS v4) instead of the reused graph buffer.
+      const auto buft = ggml_backend_get_default_buffer_type(owner.backend_);
+      if (ggml_backend_alloc_ctx_tensors_from_buft_size(ctx_.get(), buft) > 0) {
+        buffer_ = ggml_backend_alloc_ctx_tensors_from_buft(ctx_.get(), buft);
+        if (buffer_ == nullptr) {
+          throw std::runtime_error(
+              "failed to allocate Irodori-TTS condition context tensors");
+        }
       }
       core::write_tensor_i32(positions_, positions(tokens_));
       if (config.use_caption_condition) {
