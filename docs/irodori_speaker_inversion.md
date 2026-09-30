@@ -68,14 +68,17 @@ above:
 
 Not yet in a tagged release:
 
-- **feat(irodori): optional chunked codec decode.** Two session options,
-  `irodori_tts.codec_decode_chunk_steps` and
-  `irodori_tts.codec_decode_overlap_steps`, make the DACVAE codec decode the
-  latent in fixed-size windows. The decode otherwise needs about 176 MiB per
-  second of audio, which sets the peak of long requests. With
-  `codec_decode_chunk_steps=100` the peak for 25.8 s of audio drops from
-  6.2 GB to 2.4 GB (v4, RTX 5060 Ti). Off by default. Details, measurements
-  and output differences: [irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md).
+- **feat(irodori): optional chunked codec decode and reference encode.**
+  Session options `irodori_tts.codec_decode_chunk_steps` /
+  `codec_decode_overlap_steps` and `irodori_tts.codec_encode_chunk_steps` /
+  `codec_encode_overlap_steps` make the DACVAE codec process audio in
+  fixed-size windows. Otherwise the decode needs about 176 MiB per second of
+  output and the reference encode about 107 MiB per second of reference,
+  which set the peak of long requests. With both set to 100 the peak for 25.8 s
+  of output drops from 6.2 GB to 2.4 GB, and for the first request with a
+  34.7 s reference from 5.1 GB to 2.4 GB (v4, RTX 5060 Ti). Off by default.
+  Details, measurements and output differences:
+  [irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md).
 
 ### Differences from the v0.5.1 branch
 
@@ -292,7 +295,7 @@ one-line notice at the top. The modified files are:
 - `include/engine/models/irodori_tts/codec.h`, `include/engine/models/irodori_tts/condition_encoder.h`, `include/engine/models/irodori_tts/types.h`
 - `src/models/irodori_tts/assets.cpp`, `codec.cpp`, `condition_encoder.cpp`, `rf_dit.cpp`, `session.cpp`
 - `model_specs/irodori_tts.json` (JSON has no comments, so this file carries
-  no notice; it declares the two chunked-decode session options)
+  no notice; it declares the chunked encode/decode session options)
 
 New files added by this branch: `app/server/invalid_request.h`,
 `include/cuda_msvc_compat.h`, `include/engine/framework/runtime/post_process.h`,
