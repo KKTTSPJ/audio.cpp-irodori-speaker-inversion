@@ -79,6 +79,12 @@ Not yet in a tagged release:
   34.7 s reference from 5.1 GB to 2.4 GB (v4, RTX 5060 Ti). Off by default.
   Details, measurements and output differences:
   [irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md).
+- **feat(irodori): optional reference length cap.** Session option
+  `irodori_tts.max_ref_seconds` (`none` by default, `checkpoint`, or a number
+  of seconds) trims a reference WAV before encoding it, as Python Irodori-TTS
+  does with the checkpoint's `ref_max_seconds` (120 s for v4, 30 s for v3).
+  audio.cpp keeps the whole reference unless it is set. See
+  [irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md#related-reference-length-cap).
 
 ### Differences from the v0.5.1 branch
 
