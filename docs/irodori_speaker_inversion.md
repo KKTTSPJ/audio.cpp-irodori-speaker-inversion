@@ -294,6 +294,7 @@ As required by section 4(b), every upstream file changed here carries a
 one-line notice at the top. The modified files are:
 
 - `CMakeLists.txt`
+- `README.md` (a note at the top pointing to this fork's documents)
 - `app/cli/main.cpp`, `app/cli/request.cpp`
 - `app/server/runtime.cpp`
 - `app/workflow/execution.cpp`
