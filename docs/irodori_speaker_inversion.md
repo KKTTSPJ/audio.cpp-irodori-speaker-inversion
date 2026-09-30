@@ -87,9 +87,10 @@ None of them is on by default, so without them the output is identical to r2:
   audio.cpp keeps the whole reference unless it is set. See
   [irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md#related-reference-length-cap).
 
-### Additions after r3
+### Additions in r4
 
-Not yet in a tagged release:
+Tag `irodori-speaker-inversion-v0.8.2-r4` adds the following on top of r3.
+Audio output is identical to r3:
 
 - **feat(server): list Speaker Inversion embeddings as voices.** For an
   Irodori-TTS model, `GET /v1/audio/voices` now also returns the voice-library
@@ -100,7 +101,7 @@ Not yet in a tagged release:
 - **Windows launcher sources** in `packaging/windows/launcher/` (see
   [packaging/windows/README.md](../packaging/windows/README.md)): scripts that
   download the model, create a server config with the memory options on, and
-  start the server with the WebUI. Also published as a release asset of r3.
+  start the server with the WebUI. Also published as a release asset of r3 and r4.
 
 ### Differences from the v0.5.1 branch
 
