@@ -1,4 +1,16 @@
 # audio.cpp
+
+> [!NOTE]
+> **Unofficial fork of [0xShug0/audio.cpp](https://github.com/0xShug0/audio.cpp)** with Irodori-TTS Speaker Inversion support and options that bound peak memory. Modified by KKTTSPJ, 2026.
+>
+> - What this fork changes: [docs/irodori_speaker_inversion.md](docs/irodori_speaker_inversion.md)
+> - Chunked codec encode/decode and reference length cap: [docs/irodori_codec_chunked_decode.md](docs/irodori_codec_chunked_decode.md)
+> - Windows binaries: [Releases](../../releases)
+>
+> 上流 0xShug0/audio.cpp の非公式フォークです。Irodori-TTS の Speaker Inversion 対応と、使用メモリのピークを抑えるオプションを追加しています。上記の文書に変更点をまとめています（コーデックの文書は日本語の節もあります）。
+>
+> The rest of this README is upstream's and describes audio.cpp as a whole.
+
 <a href="https://trendshift.io/repositories/64983?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-64983" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/64983" alt="0xShug0%2Faudio.cpp | Trendshift" width="250" height="55"/></a>
 [![0xShug0/audio.cpp | Trendshift](https://trendshift.io/api/badge/trendshift/repositories/64983/daily?language=C%2B%2B)](https://trendshift.io/repositories/64983?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-64983)
 
