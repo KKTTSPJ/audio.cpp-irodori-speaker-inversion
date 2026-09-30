@@ -64,9 +64,10 @@ above:
   request drops by about 2.8 GB, and CUDA requests got 3–13% faster
   (RTX 5060 Ti; the gain is largest for short requests).
 
-### Additions after r2
+### Additions in r3
 
-Not yet in a tagged release:
+Tag `irodori-speaker-inversion-v0.8.2-r3` adds optional settings on top of r2.
+None of them is on by default, so without them the output is identical to r2:
 
 - **feat(irodori): optional chunked codec decode and reference encode.**
   Session options `irodori_tts.codec_decode_chunk_steps` /
