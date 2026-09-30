@@ -2,6 +2,7 @@
 #include "engine/models/irodori_tts/session.h"
 
 #include "engine/framework/debug/profiler.h"
+#include "engine/framework/io/json.h"
 #include "engine/framework/runtime/options.h"
 #include "engine/framework/runtime/spec_backed_model.h"
 #include "engine/framework/text/chunking.h"
@@ -16,6 +17,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -179,7 +181,8 @@ runtime::SessionOptions require_supported_session_options(
        {"irodori_tts.codec_backend", "irodori_tts.codec_decode_chunk_steps",
         "irodori_tts.codec_decode_overlap_steps",
         "irodori_tts.codec_encode_chunk_steps",
-        "irodori_tts.codec_encode_overlap_steps"}) {
+        "irodori_tts.codec_encode_overlap_steps",
+        "irodori_tts.max_ref_seconds"}) {
     if (checked_contract->session_option_keys.find(key) ==
         checked_contract->session_option_keys.end()) {
       validation_options.options.erase(key);
@@ -359,6 +362,44 @@ std::size_t resolve_reference_cache_slots(const runtime::SessionOptions &options
   return static_cast<std::size_t>(slots);
 }
 
+// Python Irodori-TTS trims a single reference WAV to the checkpoint's
+// ref_max_seconds (30 s for checkpoints without one) before encoding it, and
+// then trims the latent to ceil(seconds * sample_rate / hop_length) frames.
+// audio.cpp keeps the whole reference unless irodori_tts.max_ref_seconds asks
+// for a cap: "checkpoint" for the Python behaviour, or a number of seconds.
+// Returns 0 for no cap.
+double resolve_max_ref_seconds(const runtime::SessionOptions &options,
+                               const IrodoriTTSAssets &assets) {
+  constexpr double kLegacyMaxRefSeconds = 30.0;
+  const auto value =
+      runtime::find_option(options.options, {"irodori_tts.max_ref_seconds"});
+  if (!value || value->empty() || *value == "none" || *value == "off") {
+    return 0.0;
+  }
+  if (*value == "checkpoint") {
+    const double seconds = engine::io::json::optional_f32(
+        assets.resources.parse_json("model_config"), "ref_max_seconds", 0.0F);
+    return seconds > 0.0 ? seconds : kLegacyMaxRefSeconds;
+  }
+  double seconds = 0.0;
+  try {
+    std::size_t used = 0;
+    seconds = std::stod(*value, &used);
+    if (used != value->size()) {
+      throw std::invalid_argument("trailing characters");
+    }
+  } catch (const std::exception &) {
+    throw std::runtime_error(
+        "irodori_tts.max_ref_seconds must be none, checkpoint or a number of "
+        "seconds: " + *value);
+  }
+  if (!(seconds >= 0.0)) {
+    throw std::runtime_error(
+        "irodori_tts.max_ref_seconds must not be negative: " + *value);
+  }
+  return seconds;
+}
+
 IrodoriSpeakerCondition
 no_reference_speaker_condition(const IrodoriModelConfig &config) {
   IrodoriSpeakerCondition out;
@@ -503,6 +544,8 @@ IrodoriTTSSession::IrodoriTTSSession(
       runtime::parse_i64_option(this->options().options,
                                 {"irodori_tts.codec_encode_overlap_steps"})
           .value_or(16));
+  // Validate irodori_tts.max_ref_seconds now rather than on the first reference.
+  (void)resolve_max_ref_seconds(this->options(), *assets_);
   assets_->model_weights->release_storage();
   assets_->codec_weights->release_storage();
   debug::trace_log_scalar("irodori_tts.model_root",
@@ -627,8 +670,45 @@ IrodoriTTSSession::run(const runtime::TaskRequest &request) {
                                 reference_speaker_cache_.size() >=
                                     reference_speaker_cache_.capacity();
         int64_t ref_latent_steps = 0;
-        auto ref_latent = codec_->encode_reference(first_request.reference_audio,
-                                                    ref_latent_steps);
+        const double max_ref_seconds =
+            resolve_max_ref_seconds(this->options(), *assets_);
+        const runtime::AudioBuffer *reference_audio =
+            &first_request.reference_audio;
+        runtime::AudioBuffer trimmed_reference;
+        if (max_ref_seconds > 0.0 && reference_audio->channels > 0) {
+          const auto channels =
+              static_cast<std::size_t>(reference_audio->channels);
+          const std::size_t max_frames = std::max<std::size_t>(
+              1, static_cast<std::size_t>(max_ref_seconds *
+                                          reference_audio->sample_rate));
+          if (reference_audio->samples.size() / channels > max_frames) {
+            trimmed_reference.sample_rate = reference_audio->sample_rate;
+            trimmed_reference.channels = reference_audio->channels;
+            trimmed_reference.samples.assign(
+                reference_audio->samples.begin(),
+                reference_audio->samples.begin() +
+                    static_cast<std::ptrdiff_t>(max_frames * channels));
+            debug::trace_log_scalar(
+                "irodori_tts.reference.trimmed_from_seconds",
+                static_cast<double>(reference_audio->samples.size() / channels) /
+                    reference_audio->sample_rate);
+            reference_audio = &trimmed_reference;
+          }
+        }
+        auto ref_latent =
+            codec_->encode_reference(*reference_audio, ref_latent_steps);
+        if (max_ref_seconds > 0.0) {
+          const auto max_latent_steps = std::max<int64_t>(
+              1, static_cast<int64_t>(std::ceil(
+                     max_ref_seconds * assets_->codec.sample_rate /
+                     static_cast<double>(assets_->codec.hop_length))));
+          if (ref_latent_steps > max_latent_steps) {
+            const auto dim =
+                ref_latent.size() / static_cast<std::size_t>(ref_latent_steps);
+            ref_latent.resize(static_cast<std::size_t>(max_latent_steps) * dim);
+            ref_latent_steps = max_latent_steps;
+          }
+        }
         speaker = condition_encoder_->encode_speaker_reference(ref_latent,
                                                                ref_latent_steps);
         ReferenceSpeakerCacheEntry entry;
