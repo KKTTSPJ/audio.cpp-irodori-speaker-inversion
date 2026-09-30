@@ -177,7 +177,9 @@ runtime::SessionOptions require_supported_session_options(
   // options; keep them usable while still validating the values below.
   for (const char *key :
        {"irodori_tts.codec_backend", "irodori_tts.codec_decode_chunk_steps",
-        "irodori_tts.codec_decode_overlap_steps"}) {
+        "irodori_tts.codec_decode_overlap_steps",
+        "irodori_tts.codec_encode_chunk_steps",
+        "irodori_tts.codec_encode_overlap_steps"}) {
     if (checked_contract->session_option_keys.find(key) ==
         checked_contract->session_option_keys.end()) {
       validation_options.options.erase(key);
@@ -493,6 +495,13 @@ IrodoriTTSSession::IrodoriTTSSession(
           .value_or(0),
       runtime::parse_i64_option(this->options().options,
                                 {"irodori_tts.codec_decode_overlap_steps"})
+          .value_or(16));
+  codec_->set_encode_chunking(
+      runtime::parse_i64_option(this->options().options,
+                                {"irodori_tts.codec_encode_chunk_steps"})
+          .value_or(0),
+      runtime::parse_i64_option(this->options().options,
+                                {"irodori_tts.codec_encode_overlap_steps"})
           .value_or(16));
   assets_->model_weights->release_storage();
   assets_->codec_weights->release_storage();

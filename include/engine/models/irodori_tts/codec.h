@@ -1,4 +1,4 @@
-// Modified by KKTTSPJ, 2026: chunked codec decode. See docs/irodori_codec_chunked_decode.md.
+// Modified by KKTTSPJ, 2026: chunked codec encode/decode. See docs/irodori_codec_chunked_decode.md.
 #pragma once
 
 #include "engine/framework/assets/tensor_source.h"
@@ -93,6 +93,9 @@ public:
   // overlap_steps of context on each side, so the decode graph (and its
   // activation buffer) no longer grows with the output length. 0 disables.
   void set_decode_chunking(int64_t chunk_steps, int64_t overlap_steps);
+  // The same for encoding reference audio: windows of chunk_steps latent
+  // frames (hop_length samples each) plus overlap_steps on each side.
+  void set_encode_chunking(int64_t chunk_steps, int64_t overlap_steps);
   void release_graphs();
 
 private:
