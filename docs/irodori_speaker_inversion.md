@@ -64,6 +64,19 @@ above:
   request drops by about 2.8 GB, and CUDA requests got 3–13% faster
   (RTX 5060 Ti; the gain is largest for short requests).
 
+### Additions after r2
+
+Not yet in a tagged release:
+
+- **feat(irodori): optional chunked codec decode.** Two session options,
+  `irodori_tts.codec_decode_chunk_steps` and
+  `irodori_tts.codec_decode_overlap_steps`, make the DACVAE codec decode the
+  latent in fixed-size windows. The decode otherwise needs about 176 MiB per
+  second of audio, which sets the peak of long requests. With
+  `codec_decode_chunk_steps=100` the peak for 25.8 s of audio drops from
+  6.2 GB to 2.4 GB (v4, RTX 5060 Ti). Off by default. Details, measurements
+  and output differences: [irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md).
+
 ### Differences from the v0.5.1 branch
 
 - Upstream rebuilt the RF sampler's context graph (`ggml_set_input` and
@@ -276,13 +289,16 @@ one-line notice at the top. The modified files are:
 - `app/server/runtime.cpp`
 - `app/workflow/execution.cpp`
 - `include/engine/framework/runtime/session.h`
-- `include/engine/models/irodori_tts/condition_encoder.h`, `include/engine/models/irodori_tts/types.h`
-- `src/models/irodori_tts/assets.cpp`, `condition_encoder.cpp`, `rf_dit.cpp`, `session.cpp`
+- `include/engine/models/irodori_tts/codec.h`, `include/engine/models/irodori_tts/condition_encoder.h`, `include/engine/models/irodori_tts/types.h`
+- `src/models/irodori_tts/assets.cpp`, `codec.cpp`, `condition_encoder.cpp`, `rf_dit.cpp`, `session.cpp`
+- `model_specs/irodori_tts.json` (JSON has no comments, so this file carries
+  no notice; it declares the two chunked-decode session options)
 
 New files added by this branch: `app/server/invalid_request.h`,
 `include/cuda_msvc_compat.h`, `include/engine/framework/runtime/post_process.h`,
 `src/framework/runtime/post_process.cpp`,
-`tests/unittests/test_audio_post_process.cpp`, and this document.
+`tests/unittests/test_audio_post_process.cpp`,
+`docs/irodori_codec_chunked_decode.md`, and this document.
 
 ## Credits
 
