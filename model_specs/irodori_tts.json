@@ -262,6 +262,13 @@
         "default": 16
       },
       {
+        "name": "max_ref_seconds",
+        "type": "string",
+        "description": "Trim a reference WAV before encoding it: none (default, keep the whole reference), checkpoint (the checkpoint's ref_max_seconds, or 30 when it has none, as Python Irodori-TTS does), or a number of seconds.",
+        "required": false,
+        "default": "none"
+      },
+      {
         "name": "condition_weight_context_mb",
         "type": "int",
         "description": "Condition encoder weight context size in MiB; default 32.",
