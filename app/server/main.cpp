@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "config.h"
 #include "http.h"
 #include "runtime.h"
@@ -158,6 +159,12 @@ int main(int argc, char ** argv) {
         }
         if (has_arg(argc, argv, "--version")) {
             minitts::app::print_build_info(std::cout);
+            // Lets launchers tell whether "ui_management" / --ui-management is usable.
+#if defined(AUDIOCPP_HAS_NATIVE_MODEL_MANAGER)
+            std::cout << "model manager: yes\n";
+#else
+            std::cout << "model manager: no\n";
+#endif
             return 0;
         }
         if (has_arg(argc, argv, "--help") || has_arg(argc, argv, "-h")) {
