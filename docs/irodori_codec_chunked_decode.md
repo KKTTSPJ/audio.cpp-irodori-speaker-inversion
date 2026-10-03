@@ -76,6 +76,11 @@ audiocpp_cli ... --session-option irodori_tts.codec_decode_chunk_steps=100 --ses
 The options work with existing GGUF packages; their embedded model spec does
 not list them, and the session accepts them anyway.
 
+From v0.9.0 on, the server config can also hold them as
+`"session_option_defaults"` (top level, same keys). They then apply to every
+Irodori-TTS model that does not set them itself, including models the WebUI
+loads with `ui_management`, which otherwise run without them.
+
 ### How it works
 
 The codec's encoder and decoder consist of convolutions, Snake activations
@@ -252,6 +257,10 @@ audiocpp_cli ... --session-option irodori_tts.codec_decode_chunk_steps=100 --ses
 
 既存の GGUF パッケージでも使える。埋め込まれたモデル仕様には載っていないが、
 セッションは受け付ける。
+
+v0.9.0 からは、サーバー設定の最上位の `"session_option_defaults"` にも同じキーで
+書ける。自分で指定していないすべての Irodori-TTS のモデルに当たり、`ui_management` で
+WebUI が読み込むモデル（これが無いとオプションなしで動く）にも効く。
 
 ### 仕組み
 
