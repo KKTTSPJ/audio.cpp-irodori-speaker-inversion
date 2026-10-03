@@ -6,7 +6,7 @@ This branch adds support for **Speaker Inversion embeddings** to the
 training can be used in place of reference audio, from both the CLI and the
 HTTP server.
 
-Upstream audio.cpp does not implement this (as of v0.8.2). This is a personal
+Upstream audio.cpp does not implement this (as of v0.9.0). This is a personal
 fork, published so that anyone who needs the feature can read the changes or
 check out and build this branch. It is not submitted as a pull request.
 
@@ -14,8 +14,8 @@ check out and build this branch. It is not submitted as a pull request.
 
 | | |
 |---|---|
-| Based on | audio.cpp **`v0.8.2`** (`4d88768`, "Release v0.8.2") |
-| Older base | Branch `irodori-speaker-inversion/v0.5.1` carries the same feature on `release-0.5.1`. It stays as it is; this branch is a port, not a replacement of its history. |
+| Based on | audio.cpp **`v0.9.0`** (`795c45f`, "Release v0.9.0") |
+| Older bases | Branch `irodori-speaker-inversion/v0.8.2` (tags `irodori-speaker-inversion-v0.8.2` to `-r4`) carries the same feature on `v0.8.2`, and `irodori-speaker-inversion/v0.5.1` on `release-0.5.1`. They stay as they are; this branch is a port, not a replacement of their history. See [Port to v0.9.0](#port-to-v090). |
 
 ## What this branch changes
 
@@ -102,6 +102,48 @@ Audio output is identical to r3:
   [packaging/windows/README.md](../packaging/windows/README.md)): scripts that
   download the model, create a server config with the memory options on, and
   start the server with the WebUI. Also published as a release asset of r3 and r4.
+
+### Port to v0.9.0
+
+This branch is a port to upstream `v0.9.0`. The commits of the v0.8.2 branch
+(up to r4) were cherry-picked onto the `v0.9.0` tag, so they still read as
+self-contained changes on top of upstream; the v0.8.2 branch and its tags stay
+as they are. Two commits needed a conflict resolution, both keeping both sides:
+
+- `CMakeLists.txt` (commit 6): `post_process.cpp` next to upstream's relocated
+  `src/framework/audio/utilities/zipenhancer.cpp`.
+- `app/server/runtime.cpp` (commit 5): the `InvalidRequestError` → 400 handler
+  comes before upstream's new handler that keeps the CORS header on error
+  responses.
+
+Between v0.8.2 and v0.9.0 upstream changed the Irodori-TTS sources only by
+renames, and ggml is unchanged. The audio output is bit-identical to
+v0.8.2-r4 (see [Tested with](#tested-with)).
+
+What v0.9.0 brings that matters here:
+
+- **Japanese WebUI** (`webui/native/lang/lang_ja.json`). Choose 日本語 as the
+  interface language; a browser set to Japanese gets it automatically.
+- **Model management in the WebUI** (download, switch and delete model
+  packages). Upstream added it before v0.9.0. It needs a build with
+  `AUDIOCPP_BUILD_NATIVE_MODEL_MANAGER=ON` (`build_windows.ps1
+  -NativeModelManager`) and `--ui-management` or `"ui_management": true`.
+  Upstream's release binaries are built with it, and so are this fork's Windows
+  binaries from v0.9.0 on (the v0.8.2 packages were not). The manager links
+  BoringSSL statically; CMake downloads it at configure time unless
+  `AUDIOCPP_BORINGSSL_ARCHIVE` points to a local copy. Read the limitation
+  [WebUI model management does not keep the memory options](#known-limitations)
+  before turning it on.
+
+Added on top of the port:
+
+- **feat(server): `audiocpp_server --version` prints `model manager: yes|no`,**
+  so a script can tell whether `ui_management` is usable before it starts the
+  server.
+- **Windows launcher:** `start_server` reads that line. For a model-manager
+  build it prints how to turn model management on, but does not turn it on,
+  because of the limitation above. A config that turns it on for a build
+  without the manager stops with a clear message.
 
 ### Differences from the v0.5.1 branch
 
@@ -243,6 +285,12 @@ models, and on CUDA for v4 Small (the only one compared there). Reference-audio 
 no-reference generation give bit-identical output to upstream v0.8.2 built
 with commit 1 only, so the other commits do not change upstream's paths.
 
+**v0.9.0.** Built with the native model manager on the same machine, this
+branch gives bit-identical output to v0.8.2-r4: on CUDA for an embedding, a
+long text and a reference WAV, with the default options and with the four
+memory options; on the CPU backend for two embedding requests.
+`audio_post_process_test` passes.
+
 **v3 embeddings on v4.** An embedding trained against the 500M v3 checkpoint
 loads and runs on v4 Small: both use `speaker_dim = 768`. In a listening test
 on the v0.5.1 branch with the same text, seed and embedding, v3 and v4 sounded
@@ -252,6 +300,19 @@ model it was trained on, so retraining on v4 may still improve results.
 
 ## Known limitations
 
+- **WebUI model management does not keep the memory options.** With
+  `ui_management` on, the WebUI lists upstream's model catalog instead of the
+  models in the server config, and loads its choice with the catalog's session
+  options, which are empty for Irodori-TTS. So a model loaded from the WebUI
+  runs without the chunked codec and F16 options of
+  [irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md). The
+  catalog's Irodori-TTS v4.1 Small entry has the id `irodori-tts`: when the
+  server config uses the same id (the Windows launcher does), the WebUI
+  reloads that model without its session options, and API requests for
+  `irodori-tts` run without them too until the server restarts. In this mode
+  the WebUI's voice list shows upstream's demo voices instead of the embeddings
+  in `voice_dir` (the API still accepts their names). Without `ui_management`
+  none of this applies.
 - **One reference only.** Irodori-TTS v4 in Python accepts several reference
   clips (`--ref-wavs`) and concatenates their codec latents. audio.cpp takes a
   single reference clip or a single embedding.
@@ -268,7 +329,8 @@ model it was trained on, so retraining on v4 may still improve results.
   caps samples near full scale. Use `volume` to make audio louder.
 - **One GGUF per model directory.** A directory is loaded from its GGUF only
   when it holds `model.gguf` or exactly one `*.gguf` (upstream behaviour).
-  Upstream's package list installs the v4.1 Anime GGUF into the same
+  Upstream's package list (also used by the WebUI's model manager) installs
+  the v4.1 Anime GGUF into the same
   `Irodori-TTS-v4-Small-GGUF` directory as the Small one; keep them in separate
   directories, or pass the `.gguf` file itself as `--model`.
 - **Irodori-TTS v4 limitation (upstream).** With reference conditioning, v4 may
@@ -313,7 +375,7 @@ one-line notice at the top. The modified files are:
 - `CMakeLists.txt`
 - `README.md` (a note at the top pointing to this fork's documents)
 - `app/cli/main.cpp`, `app/cli/request.cpp`
-- `app/server/runtime.cpp`
+- `app/server/main.cpp`, `app/server/runtime.cpp`
 - `app/workflow/execution.cpp`
 - `include/engine/framework/runtime/session.h`
 - `include/engine/models/irodori_tts/codec.h`, `include/engine/models/irodori_tts/condition_encoder.h`, `include/engine/models/irodori_tts/types.h`
@@ -332,5 +394,5 @@ New files added by this branch: `app/server/invalid_request.h`,
 - [audio.cpp](https://github.com/0xShug0/audio.cpp) by ShugoAI LLC, the base of this fork.
 - [Irodori-TTS](https://github.com/Aratako/Irodori-TTS) by Aratako, the model family and Speaker Inversion training.
 - Development was AI-assisted: the initial implementation with Antigravity (Gemini), and the later
-  fixes, tests, review, curation and the port to v0.8.2 with Claude. Claude's involvement is also
+  fixes, tests, review, curation and the ports to v0.8.2 and v0.9.0 with Claude. Claude's involvement is also
   recorded in each commit's `Co-Authored-By` trailers.
