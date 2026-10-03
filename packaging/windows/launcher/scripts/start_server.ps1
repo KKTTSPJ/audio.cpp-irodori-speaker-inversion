@@ -38,7 +38,8 @@ if ($versionText -notmatch 'backends:\s*([^\r\n]+)') {
 $backend = if ($Matches[1] -match 'cuda') { 'cuda' } else { 'cpu' }
 # Fork builds from v0.9.0 on print a "model manager:" line and understand "session_option_defaults"
 # (session options that also reach models the WebUI loads). With "model manager: yes" the WebUI can
-# download and switch models ("ui_management").
+# download and switch models ("ui_management"). The launcher writes it as false: with it on, the
+# WebUI lists only upstream's demo voices, so the embeddings in voices\ cannot be picked there.
 $isV090Fork = $versionText -match '(?m)^model manager:'
 $hasModelManager = $versionText -match '(?m)^model manager:\s*yes'
 
@@ -88,7 +89,7 @@ if (-not (Test-Path -LiteralPath $config)) {
     ui = $true
   }
   if ($isV090Fork) {
-    if ($hasModelManager) { $cfg.ui_management = $true }
+    if ($hasModelManager) { $cfg.ui_management = $false }
     $cfg.session_option_defaults = $memoryOptions
   } else {
     $modelEntry.session_options = $memoryOptions
@@ -96,7 +97,7 @@ if (-not (Test-Path -LiteralPath $config)) {
   $cfg.voice_dir = ($voiceDir -replace '\\', '/')
   $cfg.models = @($modelEntry)
   [IO.File]::WriteAllText($config, ($cfg | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding $false))
-  Write-Host "Created $config (backend: $backend$(if ($cfg.ui_management) { ', WebUI model management on' }))"
+  Write-Host "Created $config (backend: $backend)"
 }
 
 $settings = Get-Content -LiteralPath $config -Raw | ConvertFrom-Json
@@ -122,7 +123,8 @@ foreach ($entry in @($settings.models)) {
 }
 
 if ($hasModelManager -and -not $management) {
-  Write-Host 'Note: this build can also download and switch models in the WebUI ("ui_management"); see README_launcher.txt.' -ForegroundColor Yellow
+  Write-Host ('Note: WebUI model management (download / switch models) can be turned on with' + "`n" +
+              '      "ui_management": true in server_config.json; see README_launcher.txt.') -ForegroundColor Yellow
 }
 if ($management -and -not (Has-Property $settings "session_option_defaults")) {
   Write-Host ('Note: models loaded from the WebUI run without the memory options. Move them from "session_options"' + "`n" +
