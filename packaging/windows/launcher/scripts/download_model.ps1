@@ -48,10 +48,12 @@ if (Test-Path -LiteralPath $dest) {
   Fail ("$dest exists but differs from the current file on Hugging Face.`n" +
         "Delete or move it, then run download_model.bat again.")
 }
+# Upstream's package list (the WebUI model manager) installs other Irodori-TTS packages into the
+# same folder. That is fine: server_config.json created by start_server points to the file itself.
 $others = @(Get-ChildItem -LiteralPath $dir -Filter *.gguf -File -ErrorAction SilentlyContinue)
 if ($others.Count -gt 0) {
-  Fail ("$dir already contains another .gguf file ($($others[0].Name)).`n" +
-        "The folder must contain exactly one model file. Move it elsewhere first.")
+  Write-Host ("Note: $dir also contains $($others[0].Name).`n" +
+              "      If server_config.json points to the folder instead of a .gguf file, set it to $file.") -ForegroundColor Yellow
 }
 
 if (-not $Yes) {

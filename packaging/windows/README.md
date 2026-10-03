@@ -7,7 +7,7 @@ same folder as a binary package (`cpu-avx2`, or `cuda12.8` + `cudart`) and then 
 | File | Purpose |
 |---|---|
 | `download_model.bat` | Download Irodori-TTS v4 Small (GGUF Q8_0) from `audio-cpp/audio.cpp-gguf` into `models\Irodori-TTS-v4-Small-GGUF`, resumable, SHA256 checked against the Hugging Face API |
-| `start_server.bat` | Create `server_config.json` on the first run (127.0.0.1:8090, WebUI on, CUDA or CPU detected from `audiocpp_server.exe --version`, all chunked encode/decode memory options on), start the server and open the WebUI. For a build with the native model manager (`model manager: yes` in `--version`) it prints how to enable `ui_management`, but leaves it off (see `README_launcher.txt`) |
+| `start_server.bat` | Create `server_config.json` on the first run (127.0.0.1:8090, WebUI on, CUDA or CPU detected from `audiocpp_server.exe --version`, all chunked encode/decode memory options on), start the server and open the WebUI. For a v0.9.0 or later package (`model manager:` line in `--version`) it also turns on WebUI model management (`ui_management`), writes the memory options as `session_option_defaults` so that WebUI-loaded models get them too, and points the model entry at the `.gguf` file |
 | `test_tts.bat` | Send one request to the running server and write `test.wav` |
 | `voices\` | `voice_dir`: reference WAVs and Speaker Inversion embeddings (`.speaker.safetensors`) |
 | `README_launcher.txt` | User instructions (English and Japanese) |
