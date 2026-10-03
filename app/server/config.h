@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #pragma once
 
 #include <cstdint>
@@ -109,6 +110,10 @@ struct ServerConfig {
     std::string frontend_listener;
     ServerFrontendOptions frontend_options;
     std::optional<std::filesystem::path> model_spec_override;
+    // Session options applied to every model, from the config or loaded later through
+    // the WebUI, whose session_options do not set them. Keys are family-qualified
+    // ("irodori_tts.codec_decode_chunk_steps") and only reach models of that family.
+    std::unordered_map<std::string, std::string> session_option_defaults;
     // Voice library shared across all TTS models: *.wav files plus a `prompt_text`
     // mapping file (<basename>|<transcript>). A request `voice` name that is not a
     // model preset resolves to <voice_dir>/<name>.wav as the cloning reference.
@@ -118,5 +123,8 @@ struct ServerConfig {
 
 engine::core::BackendType parse_server_backend(const std::string & value);
 ServerConfig load_server_config(const std::filesystem::path & path);
+// Adds the entries of config.session_option_defaults for model.family that the model
+// does not set itself.
+void apply_session_option_defaults(const ServerConfig & config, ServerModelConfig & model);
 
 }  // namespace minitts::server

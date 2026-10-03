@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "config.h"
 
 #include "../cli/args.h"
@@ -216,6 +217,15 @@ engine::core::BackendType parse_server_backend(const std::string & value) {
     return backend;
 }
 
+void apply_session_option_defaults(const ServerConfig & config, ServerModelConfig & model) {
+    const std::string prefix = model.family + ".";
+    for (const auto & [key, value] : config.session_option_defaults) {
+        if (key.rfind(prefix, 0) == 0) {
+            model.session_options.emplace(key, value);
+        }
+    }
+}
+
 ServerConfig load_server_config(const std::filesystem::path & path) {
     const auto root = engine::io::json::parse_file(path);
     const auto base = path.parent_path();
@@ -243,6 +253,7 @@ ServerConfig load_server_config(const std::filesystem::path & path) {
     if (const auto * value = root.find("model_spec_override")) {
         config.model_spec_override = resolve_path(base, value->as_string());
     }
+    config.session_option_defaults = options_from_object(root.find("session_option_defaults"));
     if (const auto * value = root.find("voice_dir")) {
         if (!value->is_string()) {
             throw std::runtime_error("server voice_dir must be a string");
@@ -357,6 +368,9 @@ ServerConfig load_server_config(const std::filesystem::path & path) {
             }
         }
         config.models.push_back(std::move(model));
+    }
+    for (auto & model : config.models) {
+        apply_session_option_defaults(config, model);
     }
     return config;
 }
