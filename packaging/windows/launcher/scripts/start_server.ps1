@@ -31,6 +31,11 @@ if ($versionText -notmatch 'backends:\s*([^\r\n]+)') {
   Fail "Unexpected output of 'audiocpp_server.exe --version':`n$versionText"
 }
 $backend = if ($Matches[1] -match 'cuda') { 'cuda' } else { 'cpu' }
+# Builds made with the native model manager report "model manager: yes" (v0.9.0 packages and later).
+# They can download and switch models from the WebUI when "ui_management" is set in the config.
+# The launcher does not set it: models loaded from the WebUI do not get the memory options below
+# (see README_launcher.txt).
+$hasModelManager = $versionText -match '(?m)^model manager:\s*yes'
 
 $models = @(Get-ChildItem -LiteralPath $modelDir -Filter *.gguf -File -ErrorAction SilentlyContinue)
 if ($models.Count -eq 0) {
@@ -78,6 +83,12 @@ if (-not (Test-Path -LiteralPath $config)) {
 }
 
 $settings = Get-Content -LiteralPath $config -Raw | ConvertFrom-Json
+if ($hasModelManager -and -not $settings.ui_management) {
+  Write-Host ("Note: this build can also download and switch models in the WebUI (""ui_management"": true in server_config.json).`n" +
+              "      Models loaded that way run without the memory options; see README_launcher.txt.") -ForegroundColor Yellow
+} elseif (-not $hasModelManager -and $settings.ui_management) {
+  Fail "server_config.json has ui_management enabled, but this build has no model manager.`n(Use a build made with -NativeModelManager, or remove ui_management from the config.)"
+}
 $urlHost = if ($settings.host -eq "0.0.0.0") { "127.0.0.1" } else { $settings.host }
 $url = "http://${urlHost}:$($settings.port)/"
 

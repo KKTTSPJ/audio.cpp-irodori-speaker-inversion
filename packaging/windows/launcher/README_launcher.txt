@@ -63,6 +63,24 @@ Using the API
 Request fields and Speaker Inversion usage: docs/irodori_speaker_inversion.md
 in the repository.
 
+Model management in the WebUI (optional, v0.9.0 packages and later)
+-------------------------------------------------------------------
+The binary packages are built with upstream's model manager. If you add
+  "ui_management": true,
+to server_config.json, the WebUI can also download, switch and delete models
+(stored in models\ next to the exe). start_server.bat leaves it off and only
+prints a note, because while it is on:
+  - the WebUI lists upstream's model catalog, and a model it loads runs WITHOUT
+    the memory options above. It also reloads the "irodori-tts" model of
+    server_config.json that way, so API requests run without the options too
+    until the server is restarted;
+  - the WebUI's voice list shows upstream's demo voices instead of voices\
+    (the API still accepts the names in voices\);
+  - upstream's package list installs Irodori-TTS v4.1 Anime into the same
+    models\Irodori-TTS-v4-Small-GGUF folder, but start_server.bat needs exactly
+    one .gguf there. Move the other one to a folder of its own.
+The WebUI has a Japanese interface (Interface language) either way.
+
 License
 -------
 These scripts are part of the fork and licensed under the Apache License 2.0
@@ -114,3 +132,18 @@ server_config.json
 
 参照音声・Speaker Inversion の埋め込みは voices\ に置き、ファイル名で指定します
 （voices\README.txt）。WebUI の声の一覧（Configured voices）にも表示されます（v0.8.2-r4 以降）。
+
+WebUI のモデル管理（任意、v0.9.0 以降のパッケージ）:
+  バイナリは上流のモデルマネージャ付きでビルドしています。server_config.json に
+  "ui_management": true, を足すと、WebUI からモデルのダウンロード・切り替え・削除も
+  できます（保存先は exe と同じフォルダの models\）。start_server.bat は有効にせず
+  案内だけを出します。有効にすると次のようになるためです。
+  - WebUI のモデル一覧が上流のカタログになり、そこから読み込んだモデルは上記の
+    メモリの設定なしで動きます。server_config.json の "irodori-tts" もこの形で
+    読み込み直されるので、サーバーを再起動するまでは API からの要求も設定なしになります
+  - WebUI の声の一覧は voices\ ではなく上流のデモ音声になります（API からは voices\ の
+    名前をそのまま使えます）
+  - 上流のパッケージ一覧は Irodori-TTS v4.1 Anime を同じ
+    models\Irodori-TTS-v4-Small-GGUF に入れますが、start_server.bat はこのフォルダに
+    .gguf が 1 個だけであることを前提にしています。もう一方は別のフォルダへ移してください
+  WebUI の日本語表示は、どちらの場合も Interface language から選べます。
