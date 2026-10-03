@@ -65,21 +65,24 @@ Using the API
 Request fields and Speaker Inversion usage: docs/irodori_speaker_inversion.md
 in the repository.
 
-Model management in the WebUI (v0.9.0 packages and later)
----------------------------------------------------------
-The packages are built with upstream's model manager, and start_server.bat turns
-it on ("ui_management": true): the WebUI's Models tab can download, switch and
-delete models (stored in models\ next to the exe). Models loaded from the WebUI
-also get the memory settings above ("session_option_defaults").
-  - The WebUI's voice list then offers only upstream's demo voices, so the
-    embeddings in voices\ cannot be picked in the WebUI; use test_tts.bat or
-    the API with their names, or set "ui_management" to false to see them
-    under "Configured voices" again.
+Model management in the WebUI (optional, v0.9.0 packages and later)
+-------------------------------------------------------------------
+The packages are built with upstream's model manager. start_server.bat writes
+  "ui_management": false,
+into server_config.json, so the WebUI keeps showing the voices in voices\
+(reference WAVs and Speaker Inversion embeddings) under "Configured voices".
+To use upstream's model management instead, change it to true and restart the
+server: the WebUI's Models tab can then download, switch and delete models
+(stored in models\ next to the exe). Models loaded from the WebUI also get the
+memory settings above, because they are in "session_option_defaults".
+While it is on:
+  - the WebUI's voice list offers only upstream's demo voices, so the
+    embeddings in voices\ cannot be picked in the WebUI (test_tts.bat and the
+    API still accept their names);
   - Irodori-TTS v4.1 Anime installs into the same models\Irodori-TTS-v4-Small-GGUF
     folder. That is fine: server_config.json points to the Small file itself.
-  - A server_config.json made by an older launcher stays as it is; the launcher
-    prints what to change.
-The WebUI has a Japanese interface (Interface language).
+A server_config.json made by an older launcher stays as it is; the launcher
+prints what to change. The WebUI has a Japanese interface (Interface language).
 
 License
 -------
@@ -132,19 +135,20 @@ server_config.json
   リポジトリの docs/irodori_codec_chunked_decode.md にあります。
 
 参照音声・Speaker Inversion の埋め込みは voices\ に置き、ファイル名で指定します
-（voices\README.txt）。WebUI の声の一覧（Configured voices）に表示されるのは、
-"ui_management" が false のときです（下記）。
+（voices\README.txt）。WebUI の声の一覧（Configured voices）にも表示されます
+（"ui_management" が false のとき。ランチャーの既定）。
 
-WebUI のモデル管理（v0.9.0 以降のパッケージ）:
-  バイナリは上流のモデルマネージャ付きでビルドしていて、start_server.bat はこれを
-  有効にします（"ui_management": true）。WebUI の「モデル」タブからモデルの
-  ダウンロード・切り替え・削除ができます（保存先は exe と同じフォルダの models\）。
-  WebUI から読み込んだモデルにも上記のメモリの設定が効きます（"session_option_defaults"）。
-  - このとき WebUI の声の一覧は上流のデモ音声だけになり、voices\ の埋め込みは WebUI では
-    選べません。test_tts.bat や API から名前で指定するか、"ui_management" を false に
-    すると「Configured voices」に再び表示されます
+WebUI のモデル管理（任意、v0.9.0 以降のパッケージ）:
+  バイナリは上流のモデルマネージャ付きでビルドしています。start_server.bat は
+  server_config.json に "ui_management": false, と書くので、WebUI の声の一覧
+  （Configured voices）には voices\ の参照音声と Speaker Inversion の埋め込みが出ます。
+  上流のモデル管理を使いたい場合は true に変えてサーバーを再起動してください。WebUI の
+  「モデル」タブからモデルのダウンロード・切り替え・削除ができます（保存先は exe と同じ
+  フォルダの models\）。メモリの設定は "session_option_defaults" にあるので、WebUI から
+  読み込んだモデルにも効きます。有効にしている間は次のようになります。
+  - WebUI の声の一覧は上流のデモ音声だけになり、voices\ の埋め込みは WebUI では選べません
+    （test_tts.bat や API からは名前で使えます）
   - Irodori-TTS v4.1 Anime は同じ models\Irodori-TTS-v4-Small-GGUF に入りますが、
     server_config.json は Small のファイルを直接指しているので問題ありません
-  - 以前のランチャーで作った server_config.json はそのまま使います。変更が必要な点は
-    起動時に表示します
-  WebUI の日本語表示は Interface language から選べます。
+  以前のランチャーで作った server_config.json はそのまま使い、変更が必要な点は起動時に
+  表示します。WebUI の日本語表示は Interface language から選べます。

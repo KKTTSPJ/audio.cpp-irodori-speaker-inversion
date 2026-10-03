@@ -160,13 +160,16 @@ Added on top of the port:
 - **feat(server): `audiocpp_server --version` prints `model manager: yes|no`,**
   so a script can tell whether `ui_management` is usable before it starts the
   server.
-- **Windows launcher:** for a v0.9.0 package `start_server` turns WebUI model
-  management on, writes the memory options as `session_option_defaults`, and
-  points the model entry at the `.gguf` file (so another Irodori-TTS package
-  that upstream's package list puts into the same folder does not stop it, and
-  the path matches what the WebUI loads). Configs from older launchers keep
-  working; the launcher prints what to change. A config that turns management
-  on for a build without the manager stops with a clear message.
+- **Windows launcher:** for a v0.9.0 package `start_server` writes the memory
+  options as `session_option_defaults` and `"ui_management": false`, and points
+  the model entry at the `.gguf` file (so another Irodori-TTS package that
+  upstream's package list puts into the same folder does not stop it, and the
+  path matches what the WebUI loads). Model management stays off by default so
+  that the WebUI keeps listing the voice-library embeddings; switching it to
+  `true` is enough to use it, with the memory options kept. Configs from older
+  launchers keep working; the launcher prints what to change. A config that
+  turns management on for a build without the manager stops with a clear
+  message.
 
 ### Differences from the v0.5.1 branch
 
