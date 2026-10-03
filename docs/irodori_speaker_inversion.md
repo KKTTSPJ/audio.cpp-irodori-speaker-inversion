@@ -131,19 +131,42 @@ What v0.9.0 brings that matters here:
   Upstream's release binaries are built with it, and so are this fork's Windows
   binaries from v0.9.0 on (the v0.8.2 packages were not). The manager links
   BoringSSL statically; CMake downloads it at configure time unless
-  `AUDIOCPP_BORINGSSL_ARCHIVE` points to a local copy. Read the limitation
-  [WebUI model management does not keep the memory options](#known-limitations)
-  before turning it on.
+  `AUDIOCPP_BORINGSSL_ARCHIVE` points to a local copy. See also
+  [Known limitations](#known-limitations) (WebUI model management).
 
 Added on top of the port:
+
+- **feat(server): `session_option_defaults` in the server config.** A
+  top-level object of family-qualified session options, for example
+  `"irodori_tts.codec_decode_chunk_steps": "100"`. They are added to every model
+  of that family that does not set them itself: the models of the config, and
+  the models the WebUI loads through `POST /v1/models/load`. Without it, model
+  management loses the memory options (the WebUI loads upstream's catalog
+  entries, whose session options are empty for Irodori-TTS, and reloads a
+  configured model of the same id that way).
+
+  ```json
+  {
+    "ui": true,
+    "ui_management": true,
+    "session_option_defaults": {
+      "irodori_tts.codec_decode_chunk_steps": "100",
+      "irodori_tts.codec_encode_chunk_steps": "100"
+    },
+    "models": [ { "id": "irodori-tts", "family": "irodori_tts", "path": "models/Irodori-TTS-v4-Small-GGUF/irodori-tts-v4-small-q8_0.gguf" } ]
+  }
+  ```
 
 - **feat(server): `audiocpp_server --version` prints `model manager: yes|no`,**
   so a script can tell whether `ui_management` is usable before it starts the
   server.
-- **Windows launcher:** `start_server` reads that line. For a model-manager
-  build it prints how to turn model management on, but does not turn it on,
-  because of the limitation above. A config that turns it on for a build
-  without the manager stops with a clear message.
+- **Windows launcher:** for a v0.9.0 package `start_server` turns WebUI model
+  management on, writes the memory options as `session_option_defaults`, and
+  points the model entry at the `.gguf` file (so another Irodori-TTS package
+  that upstream's package list puts into the same folder does not stop it, and
+  the path matches what the WebUI loads). Configs from older launchers keep
+  working; the launcher prints what to change. A config that turns management
+  on for a build without the manager stops with a clear message.
 
 ### Differences from the v0.5.1 branch
 
@@ -300,19 +323,20 @@ model it was trained on, so retraining on v4 may still improve results.
 
 ## Known limitations
 
-- **WebUI model management does not keep the memory options.** With
+- **WebUI model management: session options and the voice list.** With
   `ui_management` on, the WebUI lists upstream's model catalog instead of the
   models in the server config, and loads its choice with the catalog's session
-  options, which are empty for Irodori-TTS. So a model loaded from the WebUI
-  runs without the chunked codec and F16 options of
-  [irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md). The
-  catalog's Irodori-TTS v4.1 Small entry has the id `irodori-tts`: when the
-  server config uses the same id (the Windows launcher does), the WebUI
-  reloads that model without its session options, and API requests for
-  `irodori-tts` run without them too until the server restarts. In this mode
-  the WebUI's voice list shows upstream's demo voices instead of the embeddings
-  in `voice_dir` (the API still accepts their names). Without `ui_management`
-  none of this applies.
+  options, which are empty for Irodori-TTS. The catalog's Irodori-TTS v4.1
+  Small entry has the id `irodori-tts`; when the server config uses the same id
+  (the Windows launcher does), the WebUI reloads that model with those empty
+  options, and API requests for `irodori-tts` then use them too. Put options
+  that must survive this, such as the memory options of
+  [irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md), in
+  `session_option_defaults` (see [Port to v0.9.0](#port-to-v090)) rather than
+  in the model's `session_options`. In this mode the WebUI's voice list offers
+  only upstream's demo voices, so voice-library embeddings cannot be picked in
+  the WebUI (the API still accepts their names; with `ui_management` off they
+  appear under "Configured voices").
 - **One reference only.** Irodori-TTS v4 in Python accepts several reference
   clips (`--ref-wavs`) and concatenates their codec latents. audio.cpp takes a
   single reference clip or a single embedding.
@@ -375,7 +399,7 @@ one-line notice at the top. The modified files are:
 - `CMakeLists.txt`
 - `README.md` (a note at the top pointing to this fork's documents)
 - `app/cli/main.cpp`, `app/cli/request.cpp`
-- `app/server/main.cpp`, `app/server/runtime.cpp`
+- `app/server/config.cpp`, `app/server/config.h`, `app/server/main.cpp`, `app/server/runtime.cpp`
 - `app/workflow/execution.cpp`
 - `include/engine/framework/runtime/session.h`
 - `include/engine/models/irodori_tts/codec.h`, `include/engine/models/irodori_tts/condition_encoder.h`, `include/engine/models/irodori_tts/types.h`
