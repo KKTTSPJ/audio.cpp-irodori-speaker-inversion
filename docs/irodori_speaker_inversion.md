@@ -6,7 +6,7 @@ This branch adds support for **Speaker Inversion embeddings** to the
 training can be used in place of reference audio, from both the CLI and the
 HTTP server.
 
-Upstream audio.cpp does not implement this (as of v0.9.0). This is a personal
+Upstream audio.cpp does not implement this (as of v0.9.1). This is a personal
 fork, published so that anyone who needs the feature can read the changes or
 check out and build this branch. It is not submitted as a pull request.
 
@@ -14,8 +14,8 @@ check out and build this branch. It is not submitted as a pull request.
 
 | | |
 |---|---|
-| Based on | audio.cpp **`v0.9.0`** (`795c45f`, "Release v0.9.0") |
-| Older bases | Branch `irodori-speaker-inversion/v0.8.2` (tags `irodori-speaker-inversion-v0.8.2` to `-r4`) carries the same feature on `v0.8.2`, and `irodori-speaker-inversion/v0.5.1` on `release-0.5.1`. They stay as they are; this branch is a port, not a replacement of their history. See [Port to v0.9.0](#port-to-v090). |
+| Based on | audio.cpp **`v0.9.1`** (`cf124a6`, "Release v0.9.1") |
+| Older bases | Branch `irodori-speaker-inversion/v0.9.0` (tag `irodori-speaker-inversion-v0.9.0`) carries the same feature on `v0.9.0`. Branch `irodori-speaker-inversion/v0.8.2` (tags `irodori-speaker-inversion-v0.8.2` to `-r4`) carries the same feature on `v0.8.2`, and `irodori-speaker-inversion/v0.5.1` on `release-0.5.1`. They stay as they are; this branch is a port, not a replacement of their history. See [Port to v0.9.1](#port-to-v091) and [Port to v0.9.0](#port-to-v090). |
 
 ## What this branch changes
 
@@ -103,6 +103,35 @@ Audio output is identical to r3:
   download the model, create a server config with the memory options on, and
   start the server with the WebUI. Also published as a release asset of r3 and r4.
 
+### Port to v0.9.1
+
+This branch is a port to upstream `v0.9.1`. The commits of the v0.9.0 branch
+were cherry-picked onto the `v0.9.1` tag; the v0.9.0 branch and its tag stay as
+they are. Three commits needed a conflict resolution, all keeping both sides:
+
+- `app/server/runtime.cpp` (commit 5): the `invalid_request.h` include next to
+  upstream's new `live_speech_input.h`.
+- `CMakeLists.txt` (commit 6): the `audio_post_process_test` registration next
+  to upstream's new CrisperWhisper alignment test.
+- `app/server/config.h` (`session_option_defaults`): the declaration next to
+  upstream's new `load_server_config(path, parallel_jobs)` overload. Both
+  overloads go through the same loader, so the defaults apply either way.
+
+Upstream did not change the Irodori-TTS sources between v0.9.0 and v0.9.1, and
+its ggml changes are limited to the SSM operators, which Irodori-TTS does not
+use. The audio output is bit-identical to v0.9.0 (see
+[Tested with](#tested-with)).
+
+What v0.9.1 brings that matters here:
+
+- **`speed: 1.0` is accepted.** Upstream now treats a neutral `speed` like an
+  omitted field for every model, so clients that always send the OpenAI
+  default no longer fail with Irodori-TTS. Any other value is still rejected;
+  use `duration_scale`.
+- **An experimental parallel runtime** (`--parallel-jobs`). This fork's server
+  changes live in the default runtime only; see
+  [Known limitations](#known-limitations).
+
 ### Port to v0.9.0
 
 This branch is a port to upstream `v0.9.0`. The commits of the v0.8.2 branch
@@ -183,7 +212,8 @@ Added on top of the port:
 - `speed` is no longer mapped to `duration_scale`. Upstream now handles
   `speed` itself and rejects it for models whose spec declares neither
   `speed` nor `speaking_rate`, which includes Irodori-TTS. Use
-  `duration_scale` instead.
+  `duration_scale` instead. From v0.9.1 on, `speed: 1.0` is accepted and
+  ignored.
 - `normalize_db` / `volume` now also work in `--request-sequence` JSON items.
   On the v0.5.1 branch they fail there with
   `unknown Irodori-TTS request option: normalize_db`.
@@ -294,7 +324,7 @@ Irodori-TTS-Server options that audio.cpp does not implement are **not**
 forwarded, so they are silently ignored rather than rejected:
 `t_schedule_mode`, `sway_coeff`, `lora_adapter`, `chunking_enabled`,
 `chunk_min_chars`. `speed` is the exception: upstream's server rejects it for
-Irodori-TTS (see above).
+Irodori-TTS unless it is `1.0` (see above).
 
 ## Tested with
 
@@ -316,6 +346,13 @@ branch gives bit-identical output to v0.8.2-r4: on CUDA for an embedding, a
 long text and a reference WAV, with the default options and with the four
 memory options; on the CPU backend for two embedding requests.
 `audio_post_process_test` passes.
+
+**v0.9.1.** Built the same way, this branch gives bit-identical output to
+v0.9.0 (and so to v0.8.2-r4) for the same CUDA and CPU requests.
+`audio_post_process_test` passes. With `ui_management` on and the memory
+options only in `session_option_defaults`, reloading `irodori-tts` through
+`POST /v1/models/load` (as the WebUI does) still gives the output of the
+configured options.
 
 **v3 embeddings on v4.** An embedding trained against the 500M v3 checkpoint
 loads and runs on v4 Small: both use `speaker_dim = 768`. In a listening test
@@ -364,6 +401,15 @@ model it was trained on, so retraining on v4 may still improve results.
   occasionally add a short extra phrase at the end of a clip. Upstream
   audio.cpp documents this in `docs/models/irodori_tts.md`, and it reproduces
   in the Python implementation too.
+- **`--parallel-jobs` (experimental upstream runtime).** Upstream v0.9.1 added
+  a second server runtime (`app/server/parallel_runtime.cpp`) that is used
+  only with `--parallel-jobs`. It is a separate copy of the server code and
+  does not carry this fork's server changes: the embedding fields and the
+  voice-library embeddings, the Irodori-TTS-Server compatible fields and their
+  400 answers, `normalize_db` / `volume`, the embeddings in the voice list, and
+  `session_option_defaults` for models the WebUI loads (models in the config
+  still get them). Run the server without `--parallel-jobs` (upstream marks it
+  experimental). The Windows launcher never passes it.
 
 ## Build notes (Windows, MSVC + CUDA)
 
@@ -421,5 +467,5 @@ New files added by this branch: `app/server/invalid_request.h`,
 - [audio.cpp](https://github.com/0xShug0/audio.cpp) by ShugoAI LLC, the base of this fork.
 - [Irodori-TTS](https://github.com/Aratako/Irodori-TTS) by Aratako, the model family and Speaker Inversion training.
 - Development was AI-assisted: the initial implementation with Antigravity (Gemini), and the later
-  fixes, tests, review, curation and the ports to v0.8.2 and v0.9.0 with Claude. Claude's involvement is also
+  fixes, tests, review, curation and the ports to v0.8.2, v0.9.0 and v0.9.1 with Claude. Claude's involvement is also
   recorded in each commit's `Co-Authored-By` trailers.
