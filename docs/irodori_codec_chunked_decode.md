@@ -20,6 +20,13 @@ same level.
 
 The options are off by default, so nothing changes unless you set them.
 
+> **Now upstream.** The four chunking options were merged into upstream
+> audio.cpp as [#835](https://github.com/0xShug0/audio.cpp/pull/835) (after
+> v0.9.1), with the same names, defaults and behaviour; upstream documents them
+> in `docs/models/irodori_tts.md`. Branches from upstream `main` on carry no
+> code of their own for them. The reference length cap (`max_ref_seconds`,
+> below) remains specific to this fork.
+
 ### Where the memory goes
 
 Buffer sizes of each stage's compute graph, measured with Irodori-TTS v4
@@ -206,6 +213,12 @@ no longer depends on the reference length at all.
 の有無にかかわらず、ピークはほぼ同じ水準になる。
 
 既定では無効なので、設定しない限り動作は変わらない。
+
+> **上流に取り込まれた。** 区切り処理の 4 つのオプションは、上流 audio.cpp に
+> [#835](https://github.com/0xShug0/audio.cpp/pull/835)（v0.9.1 の後）として同じ名前・既定値・
+> 動作で入った。上流の説明は `docs/models/irodori_tts.md`。上流 `main` 以降を基にした
+> ブランチは、このための独自のコードを持たない。参照音声の長さの上限（`max_ref_seconds`、後述）は
+> このフォーク独自のまま。
 
 ### メモリの内訳
 
