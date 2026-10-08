@@ -6,16 +6,31 @@ This branch adds support for **Speaker Inversion embeddings** to the
 training can be used in place of reference audio, from both the CLI and the
 HTTP server.
 
-Upstream audio.cpp does not implement this (as of v0.9.1). This is a personal
-fork, published so that anyone who needs the feature can read the changes or
-check out and build this branch. It is not submitted as a pull request.
+Since 2026-10-08 upstream audio.cpp has the core of this itself: three pull
+requests from this fork were merged after v0.9.1 (no release tag yet):
+
+- [#829](https://github.com/0xShug0/audio.cpp/pull/829) Speaker Inversion
+  embeddings as the speaker condition: request option `speaker_embedding_path`,
+  or a voice id naming `<model dir>/embeddings/<name>.safetensors`.
+- [#832](https://github.com/0xShug0/audio.cpp/pull/832) checkpoints without a
+  duration predictor (500M v2).
+- [#835](https://github.com/0xShug0/audio.cpp/pull/835) the opt-in chunked codec
+  decode and reference encode
+  ([irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md)).
+
+This branch builds on those and keeps what upstream does not have: the
+Irodori-TTS-Server compatible request fields and embeddings in the server's
+voice library, output post-processing (`normalize_db` / `volume`), the
+reference length cap (`max_ref_seconds`), `session_option_defaults`, and the
+Windows launcher. It is a personal fork, published so that anyone who needs
+these can read the changes or check out and build this branch.
 
 ## Base version
 
 | | |
 |---|---|
-| Based on | audio.cpp **`v0.9.1`** (`cf124a6`, "Release v0.9.1") |
-| Older bases | Branch `irodori-speaker-inversion/v0.9.0` (tag `irodori-speaker-inversion-v0.9.0`) carries the same feature on `v0.9.0`. Branch `irodori-speaker-inversion/v0.8.2` (tags `irodori-speaker-inversion-v0.8.2` to `-r4`) carries the same feature on `v0.8.2`, and `irodori-speaker-inversion/v0.5.1` on `release-0.5.1`. They stay as they are; this branch is a port, not a replacement of their history. See [Port to v0.9.1](#port-to-v091) and [Port to v0.9.0](#port-to-v090). |
+| Based on | audio.cpp **`main` at `c7f5743`** (after `v0.9.1`, with the merged pull requests above; no release tag yet). See [Port to upstream main](#port-to-upstream-main-after-v091). |
+| Older bases | Branch `irodori-speaker-inversion/v0.9.0` (tag `irodori-speaker-inversion-v0.9.0`) carries the same feature on `v0.9.0`, with this fork's own implementation of the parts that are now upstream. Branch `irodori-speaker-inversion/v0.8.2` (tags `irodori-speaker-inversion-v0.8.2` to `-r4`) carries the same feature on `v0.8.2`, and `irodori-speaker-inversion/v0.5.1` on `release-0.5.1`. They stay as they are; this branch is a port, not a replacement of their history. See [Port to v0.9.1](#port-to-v091) (not published) and [Port to v0.9.0](#port-to-v090). |
 
 ## What this branch changes
 
@@ -27,26 +42,22 @@ reviewed or cherry-picked on its own:
    supports (tested: MSVC 14.51 with CUDA 12.8), and compiles C/C++ with
    `/utf-8`. Independent of everything else. See
    [Build notes](#build-notes-windows-msvc--cuda).
-2. **fix(irodori): keep condition-encoder context tensors alive.** The
-   condition graph gets a backend buffer for its context tensors. As first
-   ported this buffer covered the whole graph, costing about 4 GB per request;
-   see [Fixes after v0.8.2](#fixes-after-v082).
-3. **feat(irodori): checkpoints without `duration_predictor` weights.** Those
-   weights become optional. When they are missing, automatic duration
-   prediction raises a clear error asking for an explicit duration instead of
-   reading an uninitialised placeholder tensor.
-4. **feat(irodori): Speaker Inversion embeddings.** The core of this branch.
-   `VoiceReference` gains `speaker_embedding` / `speaker_embedding_path`; when
-   either is set, the Irodori-TTS session injects the embedding directly as the
-   speaker condition and skips reference-audio encoding.
-5. **feat(cli, server): request fields for embeddings and Irodori-TTS-Server
+2. *(Up to the v0.9.1 branch only:)* **fix(irodori): keep condition-encoder
+   context tensors alive**, **feat(irodori): checkpoints without
+   `duration_predictor` weights** and **feat(irodori): Speaker Inversion
+   embeddings** (the core, which added fields to the framework's
+   `VoiceReference`). Upstream now has these as #829 and #832, so this branch
+   no longer carries them; see
+   [Port to upstream main](#port-to-upstream-main-after-v091).
+3. **feat(cli, server): request fields for embeddings and Irodori-TTS-Server
    compatibility.** Embeddings can also live in the server's voice library.
+   They reach the model as upstream's `speaker_embedding_path` option.
    See [Usage](#usage) and [Request field reference](#request-field-reference).
-6. **feat: output post-processing.** Optional peak normalisation
+4. **feat: output post-processing.** Optional peak normalisation
    (`normalize_db`) and gain (`volume`, with a soft limiter), applied by the CLI
    (single requests and `--request-sequence` batches) and the server after
    synthesis, with unit tests.
-7. **docs:** this file.
+5. **docs:** this file.
 
 ### Fixes after v0.8.2
 
@@ -102,6 +113,46 @@ Audio output is identical to r3:
   [packaging/windows/README.md](../packaging/windows/README.md)): scripts that
   download the model, create a server config with the memory options on, and
   start the server with the WebUI. Also published as a release asset of r3 and r4.
+
+### Port to upstream main (after v0.9.1)
+
+This branch is rebuilt on upstream `main` at `c7f5743`, which contains the
+three merged pull requests, but no release tag yet. A published branch will be
+made on the next upstream release tag. The v0.9.1 working branch was not
+published; the v0.9.0 branch stays as the latest published one.
+
+From the v0.9.1 branch:
+
+- **Dropped, because upstream now has them:** the Speaker Inversion core, the
+  support for checkpoints without `duration_predictor` weights, the two
+  condition-encoder allocation fixes (upstream no longer builds the duration
+  inputs that needed them), and the chunked codec decode and encode (#835 is
+  the same code, with the same option names and defaults). This fork no
+  longer changes `include/engine/framework/runtime/session.h` or any
+  Irodori-TTS source except `session.cpp`.
+- **Rewritten:** the CLI and server request fields now pass an embedding as
+  the `speaker_embedding_path` request option instead of the removed
+  `VoiceReference` fields. They resolve paths and the voice library as before.
+- **Re-applied on upstream's code:** the reference length cap
+  (`max_ref_seconds`), in the reference branch of upstream's `session.cpp`.
+- Everything else (post-processing, voice listing, `session_option_defaults`,
+  `--version`, the launcher, the docs) is cherry-picked unchanged.
+
+What changes for users of this fork:
+
+- **Embedding file format** follows upstream (and Python Irodori-TTS): only a
+  tensor named `speaker_embedding` is read, and raw float32 files are no
+  longer accepted. Files written by Irodori-TTS are unaffected.
+- **A checkpoint without a duration predictor** now generates 30 seconds and
+  trims the trailing silence when no duration is given, as Python does,
+  instead of stopping with an error.
+- **New from upstream:** a voice id that names
+  `<model dir>/embeddings/<name>.safetensors` selects that embedding, and
+  `speed: 1.0` is accepted (v0.9.1).
+
+Upstream's #801 (CUDA transpose convolution, merged right after #835) does not
+affect Irodori-TTS: its codec takes the `col2im` path on CUDA, not the changed
+kernel; outputs and timing were unchanged in a before/after build.
 
 ### Port to v0.9.1
 
@@ -220,16 +271,15 @@ Added on top of the port:
 
 ## Embedding file format
 
-- **`.safetensors`** (what Irodori-TTS writes as `*.speaker.safetensors`). The
-  tensor is looked up by name, in this order: `speaker_state`,
-  `speaker_embedding`, `embedding`, `speaker`. Any other name is an error that
-  lists the tensors found. Dtype `F32`, `F16` or `BF16`.
-- **Raw little-endian float32** (any other extension, given explicitly via
-  `--speaker-embedding` / `ref_embed` / `speaker_embedding`).
+- **`.safetensors`** as Irodori-TTS writes it (`*.speaker.safetensors`), with one
+  tensor named `speaker_embedding` (upstream's loader, as in Python). Dtype
+  `F32`, `F16` or `BF16`.
 
-The shape must be `[tokens, speaker_dim]`, flattened. The token count is
-derived from the element count; a size that is not a multiple of the model's
-`speaker_dim` is rejected. For the checkpoints below `speaker_dim` is 768, and
+The shape must be `[tokens, speaker_dim]` (or `[1, tokens, speaker_dim]`).
+Branches up to v0.9.1 also accepted the tensor names `speaker_state`,
+`embedding` and `speaker`, and raw little-endian float32 files.
+
+For the checkpoints below `speaker_dim` is 768, and
 Irodori-TTS embeddings are typically `[16, 768]`.
 
 ## Usage
@@ -354,6 +404,14 @@ options only in `session_option_defaults`, reloading `irodori-tts` through
 `POST /v1/models/load` (as the WebUI does) still gives the output of the
 configured options.
 
+**Upstream main (`c7f5743`).** Built the same way, with this fork's request
+fields now passing embeddings to upstream's loader, the output is bit-identical
+to v0.9.0 and v0.9.1 for the same CUDA requests (default and the four memory
+options) and CPU requests. The embedding resolves to the same output whether it
+is given by path, `voice_ref`, `ref_embed` / `speaker_embedding`, or a voice
+library name. `audio_post_process_test` passes, and the WebUI reload check of
+`session_option_defaults` gives the same result as before.
+
 **v3 embeddings on v4.** An embedding trained against the 500M v3 checkpoint
 loads and runs on v4 Small: both use `speaker_dim = 768`. In a listening test
 on the v0.5.1 branch with the same text, seed and embedding, v3 and v4 sounded
@@ -384,8 +442,9 @@ model it was trained on, so retraining on v4 may still improve results.
   linear schedule as Irodori-TTS's default `--t-schedule-mode linear`. Sway
   sampling is not implemented, so output differs from a Python setup that uses
   `sway`. With more steps (48 in our tests) the difference was not audible.
-- **Checkpoints without `duration_predictor` weights** need an explicit
-  duration (`duration_seconds` / `seconds` / `--duration-seconds`).
+- **Checkpoints without `duration_predictor` weights** generate 30 seconds and
+  trim the trailing silence unless a duration is given (`duration_seconds` /
+  `seconds` / `--duration-seconds`); pass one when the length is known.
 - **The server reads local files named in requests.** Like upstream's
   `voice_ref`, the fields above resolve paths on the server's disk. Do not
   expose the server to untrusted clients.
@@ -450,11 +509,9 @@ one-line notice at the top. The modified files are:
 - `app/cli/main.cpp`, `app/cli/request.cpp`
 - `app/server/config.cpp`, `app/server/config.h`, `app/server/main.cpp`, `app/server/runtime.cpp`
 - `app/workflow/execution.cpp`
-- `include/engine/framework/runtime/session.h`
-- `include/engine/models/irodori_tts/codec.h`, `include/engine/models/irodori_tts/condition_encoder.h`, `include/engine/models/irodori_tts/types.h`
-- `src/models/irodori_tts/assets.cpp`, `codec.cpp`, `condition_encoder.cpp`, `rf_dit.cpp`, `session.cpp`
+- `src/models/irodori_tts/session.cpp` (`max_ref_seconds`)
 - `model_specs/irodori_tts.json` (JSON has no comments, so this file carries
-  no notice; it declares the chunked encode/decode session options)
+  no notice; it declares the `max_ref_seconds` session option)
 
 New files added by this branch: `app/server/invalid_request.h`,
 `include/cuda_msvc_compat.h`, `include/engine/framework/runtime/post_process.h`,
@@ -467,5 +524,5 @@ New files added by this branch: `app/server/invalid_request.h`,
 - [audio.cpp](https://github.com/0xShug0/audio.cpp) by ShugoAI LLC, the base of this fork.
 - [Irodori-TTS](https://github.com/Aratako/Irodori-TTS) by Aratako, the model family and Speaker Inversion training.
 - Development was AI-assisted: the initial implementation with Antigravity (Gemini), and the later
-  fixes, tests, review, curation and the ports to v0.8.2, v0.9.0 and v0.9.1 with Claude. Claude's involvement is also
+  fixes, tests, review, curation, the ports to v0.8.2, v0.9.0, v0.9.1 and upstream main, and the upstream pull requests with Claude. Claude's involvement is also
   recorded in each commit's `Co-Authored-By` trailers.
