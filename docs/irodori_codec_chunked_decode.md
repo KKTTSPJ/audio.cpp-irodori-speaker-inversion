@@ -24,8 +24,11 @@ The options are off by default, so nothing changes unless you set them.
 > audio.cpp as [#835](https://github.com/0xShug0/audio.cpp/pull/835) (after
 > v0.9.1), with the same names, defaults and behaviour; upstream documents them
 > in `docs/models/irodori_tts.md`. Branches from upstream `main` on carry no
-> code of their own for them. The reference length cap (`max_ref_seconds`,
-> below) remains specific to this fork.
+> code of their own for them. The reference length cap (below) followed as
+> [#854](https://github.com/0xShug0/audio.cpp/pull/854): upstream trims long
+> references like Python by default, with the request option `max_ref_sec`.
+> This fork keeps only the old session option `irodori_tts.max_ref_seconds`
+> for compatibility.
 
 ### Where the memory goes
 
@@ -173,24 +176,30 @@ Python Irodori-TTS trims a single reference WAV to the checkpoint's
 `ref_max_seconds` before encoding it: 120 seconds for v4 Small, v4.1 Small and
 v4.1 Anime, and 30 seconds for checkpoints that do not state it (the v3
 models). Its README notes that about 30 seconds already captures most of the
-benefit for v4 Small. audio.cpp does not trim, and encodes the whole reference.
+benefit for v4 Small.
 
-This fork keeps the audio.cpp behaviour by default and adds a session option to
-choose the Python behaviour:
+Upstream audio.cpp does the same by default since
+[#854](https://github.com/0xShug0/audio.cpp/pull/854) (after v0.9.1), which
+came from this fork. The request option `max_ref_sec` sets another length in
+seconds, and `0` keeps the whole reference. Like Python, the WAV is cut to its
+first `int(seconds × sample_rate)` frames at its own sample rate before
+encoding, and the latent to `ceil(seconds × 48000 / 1920)` frames after it, so
+a trimmed reference gives the same output as passing the WAV already cut.
+Trimming also lowers the encode's memory; combined with
+`codec_encode_chunk_steps`, the encode peak no longer depends on the reference
+length at all.
+
+Before that, this fork kept the whole reference by default and offered a
+session option for the Python behaviour. Configs written for it still work:
+the option now sets the default for `max_ref_sec`.
 
 | `irodori_tts.max_ref_seconds` | Behaviour |
 |---|---|
-| not set, `none`, `off` or `0` | Keep the whole reference (default; audio.cpp behaviour). |
-| `checkpoint` | Trim to the checkpoint's `ref_max_seconds`, or 30 seconds when it has none (Python behaviour). |
+| not set or `checkpoint` | Upstream's default: the checkpoint's `ref_max_seconds`, or 30 seconds. |
+| `none`, `off` or `0` | Keep the whole reference. |
 | a number, for example `30` | Trim to that many seconds. |
 
-Like Python, the WAV is cut to its first `int(seconds × sample_rate)` frames
-at its own sample rate before encoding, and the latent to
-`ceil(seconds × 48000 / 1920)` frames after it. A 34.7 s reference cut with
-`30` gives output identical to passing the same WAV already cut to its first
-30 seconds (checked on v4, and on v3 with `checkpoint`). Trimming also lowers
-the encode's memory; combined with `codec_encode_chunk_steps`, the encode peak
-no longer depends on the reference length at all.
+A request's own `max_ref_sec` overrides it.
 
 ### Limitations
 
@@ -217,8 +226,10 @@ no longer depends on the reference length at all.
 > **上流に取り込まれた。** 区切り処理の 4 つのオプションは、上流 audio.cpp に
 > [#835](https://github.com/0xShug0/audio.cpp/pull/835)（v0.9.1 の後）として同じ名前・既定値・
 > 動作で入った。上流の説明は `docs/models/irodori_tts.md`。上流 `main` 以降を基にした
-> ブランチは、このための独自のコードを持たない。参照音声の長さの上限（`max_ref_seconds`、後述）は
-> このフォーク独自のまま。
+> ブランチは、このための独自のコードを持たない。参照音声の長さの上限（後述）も
+> [#854](https://github.com/0xShug0/audio.cpp/pull/854) として入り、上流は既定で Python 版と同じく
+> 長い参照を切り詰める（リクエストオプション `max_ref_sec`）。このフォークは互換のため、
+> 以前のセッションオプション `irodori_tts.max_ref_seconds` だけを残す。
 
 ### メモリの内訳
 
@@ -348,24 +359,28 @@ Windows 10、RTX 5060 Ti 16 GB、Irodori-TTS v4（GGUF Q8_0）、48 ステップ
 Python 版の Irodori-TTS は、参照 WAV が 1 本のとき、エンコードの前にチェック
 ポイントの `ref_max_seconds` の長さで切り詰める。v4 Small、v4.1 Small、v4.1 Anime
 は 120 秒、値を持たないチェックポイント（v3 系）は 30 秒になる。v4 Small の README
-には、約 30 秒で効果のほとんどが得られるとある。audio.cpp は切り詰めずに参照全体を
-エンコードする。
+には、約 30 秒で効果のほとんどが得られるとある。
 
-このフォークは既定では audio.cpp の動作のままにし、Python 版の動作を選ぶセッション
-オプションを追加する。
+上流 audio.cpp も、このフォークから出した
+[#854](https://github.com/0xShug0/audio.cpp/pull/854)（v0.9.1 の後）から既定で同じ動作に
+なった。リクエストオプション `max_ref_sec` で別の秒数を指定でき、`0` なら参照全体を使う。
+Python 版と同じく、WAV は元の標本化周波数のまま先頭 `int(秒数 × 標本化周波数)` フレーム
+を残してエンコードし、潜在表現はエンコード後に `ceil(秒数 × 48000 / 1920)` フレームに
+切るので、切り詰めた出力は、あらかじめ切った WAV を渡した出力と一致する。切り詰めると
+エンコードのメモリも減る。`codec_encode_chunk_steps` と組み合わせれば、エンコードの
+ピークは参照の長さにまったく依存しなくなる。
+
+それ以前のこのフォークは、既定では参照全体を使い、Python 版の動作をセッション
+オプションで選ぶ形だった。そのための設定は今も使え、オプションは `max_ref_sec` の
+既定値を決める。
 
 | `irodori_tts.max_ref_seconds` | 動作 |
 |---|---|
-| 未指定・`none`・`off`・`0` | 参照全体を使う（既定。audio.cpp の動作） |
-| `checkpoint` | チェックポイントの `ref_max_seconds` で切り詰める。値がなければ 30 秒（Python 版の動作） |
+| 未指定・`checkpoint` | 上流の既定。チェックポイントの `ref_max_seconds`、値がなければ 30 秒 |
+| `none`・`off`・`0` | 参照全体を使う |
 | 数値（例: `30`） | その秒数で切り詰める |
 
-Python 版と同じく、WAV は元の標本化周波数のまま先頭 `int(秒数 × 標本化周波数)`
-フレームを残してエンコードし、潜在表現はエンコード後に `ceil(秒数 × 48000 / 1920)`
-フレームに切る。34.7 秒の参照を `30` で切った出力は、同じ WAV をあらかじめ先頭
-30 秒に切って渡した出力と一致した（v4、および v3 で `checkpoint` を指定して確認）。
-切り詰めるとエンコードのメモリも減る。`codec_encode_chunk_steps` と組み合わせれば、
-エンコードのピークは参照の長さにまったく依存しなくなる。
+リクエストで `max_ref_sec` を指定すれば、そちらが優先される。
 
 ### 制限
 
