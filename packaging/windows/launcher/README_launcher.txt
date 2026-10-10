@@ -47,14 +47,19 @@ them under "session_options" of the model):
   "irodori_tts.codec_decode_chunk_steps": "100"   decode audio in 4 s windows
   "irodori_tts.codec_encode_chunk_steps": "100"   encode reference audio in 4 s windows
   "irodori_tts.codec_weight_type": "f16"          codec weights in F16
-  "irodori_tts.max_ref_seconds": "checkpoint"     trim reference audio as Python Irodori-TTS does
 
 With them, GPU memory stays at about 2 GB for short and long requests alike
 (Irodori-TTS v4, RTX 5060 Ti; without them a 26 s output needed 6.2 GB). The
 difference in the output is very small. If you have enough memory and want the
-same behaviour as upstream audio.cpp, delete these four lines and restart the
+same behaviour as upstream audio.cpp, delete these three lines and restart the
 server. Details (English and Japanese):
 docs/irodori_codec_chunked_decode.md in the repository.
+
+Reference audio longer than the model's limit (120 s for v4, 30 s for v3) is
+trimmed as Python Irodori-TTS does; audio.cpp does this by default now.
+Configs created by older packages may also contain
+"irodori_tts.max_ref_seconds": "checkpoint". It is still accepted and does
+the same, so it can stay or be deleted.
 
 Using the API
 -------------

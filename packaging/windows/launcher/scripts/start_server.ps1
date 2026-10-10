@@ -71,7 +71,6 @@ if (-not (Test-Path -LiteralPath $config)) {
     "irodori_tts.codec_decode_chunk_steps" = "100"
     "irodori_tts.codec_encode_chunk_steps" = "100"
     "irodori_tts.codec_weight_type" = "f16"
-    "irodori_tts.max_ref_seconds" = "checkpoint"
   }
   $modelEntry = [ordered]@{
     id = "irodori-tts"
