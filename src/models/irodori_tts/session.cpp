@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: irodori_tts.max_ref_seconds session option kept as the default for max_ref_sec. See docs/irodori_codec_chunked_decode.md.
 #include "engine/models/irodori_tts/session.h"
 
 #include "engine/framework/debug/profiler.h"
@@ -91,7 +92,8 @@ runtime::SessionOptions require_supported_session_options(
        {"irodori_tts.codec_backend", "irodori_tts.codec_decode_chunk_steps",
         "irodori_tts.codec_decode_overlap_steps",
         "irodori_tts.codec_encode_chunk_steps",
-        "irodori_tts.codec_encode_overlap_steps"}) {
+        "irodori_tts.codec_encode_overlap_steps",
+        "irodori_tts.max_ref_seconds"}) {
     if (checked_contract->session_option_keys.find(key) ==
         checked_contract->session_option_keys.end()) {
       validation_options.options.erase(key);
@@ -310,6 +312,40 @@ trim_reference_audio(const runtime::AudioBuffer &audio,
       audio.samples.begin() +
           static_cast<std::ptrdiff_t>(max_frames * channels));
   return trimmed;
+}
+
+// This fork's session option from before upstream added the max_ref_sec
+// request option (#854). Kept so existing server configs and launcher installs
+// still load: "checkpoint" (or unset) leaves upstream's default, the
+// checkpoint's ref_max_seconds; "none" / "off" / 0 keeps the whole reference;
+// a number caps it at that many seconds. A request's max_ref_sec still wins.
+std::optional<float>
+session_max_ref_sec(const runtime::SessionOptions &options) {
+  const auto value =
+      runtime::find_option(options.options, {"irodori_tts.max_ref_seconds"});
+  if (!value || value->empty() || *value == "checkpoint") {
+    return std::nullopt;
+  }
+  if (*value == "none" || *value == "off") {
+    return 0.0F;
+  }
+  float seconds = 0.0F;
+  try {
+    std::size_t used = 0;
+    seconds = std::stof(*value, &used);
+    if (used != value->size()) {
+      throw std::invalid_argument("trailing characters");
+    }
+  } catch (const std::exception &) {
+    throw std::runtime_error(
+        "irodori_tts.max_ref_seconds must be none, checkpoint or a number of "
+        "seconds: " + *value);
+  }
+  if (!std::isfinite(seconds) || seconds < 0.0F) {
+    throw std::runtime_error(
+        "irodori_tts.max_ref_seconds must not be negative: " + *value);
+  }
+  return seconds;
 }
 
 // Returns 0 when the reference is not capped.
@@ -572,6 +608,8 @@ IrodoriTTSSession::IrodoriTTSSession(
       runtime::parse_i64_option(this->options().options,
                                 {"irodori_tts.codec_encode_overlap_steps"})
           .value_or(16));
+  // Validate irodori_tts.max_ref_seconds now rather than on the first request.
+  (void)session_max_ref_sec(this->options());
   assets_->model_weights->release_storage();
   assets_->codec_weights->release_storage();
   debug::trace_log_scalar("irodori_tts.model_root",
@@ -931,6 +969,9 @@ IrodoriTTSSession::make_request(const runtime::TaskRequest &request) const {
     out.no_ref = false;
   }
   out.max_ref_sec = assets_->config.ref_max_seconds;
+  if (const auto fork_default = session_max_ref_sec(this->options())) {
+    out.max_ref_sec = *fork_default;
+  }
   if (const auto value = runtime::parse_finite_float_option(
           request.options, {"reference_duration_sec", "max_ref_sec"})) {
     if (*value < 0.0F) {
