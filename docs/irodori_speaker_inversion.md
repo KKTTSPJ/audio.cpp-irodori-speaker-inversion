@@ -6,7 +6,7 @@ This branch adds support for **Speaker Inversion embeddings** to the
 training can be used in place of reference audio, from both the CLI and the
 HTTP server.
 
-Since 2026-10-08 upstream audio.cpp has the core of this itself: three pull
+Since 2026-10-08 upstream audio.cpp has the core of this itself: four pull
 requests from this fork were merged after v0.9.1 (no release tag yet):
 
 - [#829](https://github.com/0xShug0/audio.cpp/pull/829) Speaker Inversion
@@ -17,11 +17,16 @@ requests from this fork were merged after v0.9.1 (no release tag yet):
 - [#835](https://github.com/0xShug0/audio.cpp/pull/835) the opt-in chunked codec
   decode and reference encode
   ([irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md)).
+- [#854](https://github.com/0xShug0/audio.cpp/pull/854) the reference length
+  cap: references longer than the checkpoint's `ref_max_seconds` are trimmed
+  like Python by default, and the request option `max_ref_sec` sets another
+  length.
 
 This branch builds on those and keeps what upstream does not have: the
 Irodori-TTS-Server compatible request fields and embeddings in the server's
-voice library, output post-processing (`normalize_db` / `volume`), the
-reference length cap (`max_ref_seconds`), `session_option_defaults`, and the
+voice library, output post-processing (`normalize_db` / `volume`), the old
+session option of the reference length cap (`irodori_tts.max_ref_seconds`,
+kept so existing configs still load), `session_option_defaults`, and the
 Windows launcher. It is a personal fork, published so that anyone who needs
 these can read the changes or check out and build this branch.
 
@@ -29,7 +34,7 @@ these can read the changes or check out and build this branch.
 
 | | |
 |---|---|
-| Based on | audio.cpp **`main` at `c7f5743`** (after `v0.9.1`, with the merged pull requests above; no release tag yet). See [Port to upstream main](#port-to-upstream-main-after-v091). |
+| Based on | audio.cpp **`main` at `2209425`** (after `v0.9.1`, with the merged pull requests above; no release tag yet). See [Port to upstream main](#port-to-upstream-main-after-v091). |
 | Older bases | Branch `irodori-speaker-inversion/v0.9.0` (tag `irodori-speaker-inversion-v0.9.0`) carries the same feature on `v0.9.0`, with this fork's own implementation of the parts that are now upstream. Branch `irodori-speaker-inversion/v0.8.2` (tags `irodori-speaker-inversion-v0.8.2` to `-r4`) carries the same feature on `v0.8.2`, and `irodori-speaker-inversion/v0.5.1` on `release-0.5.1`. They stay as they are; this branch is a port, not a replacement of their history. See [Port to v0.9.1](#port-to-v091) (not published) and [Port to v0.9.0](#port-to-v090). |
 
 ## What this branch changes
@@ -116,8 +121,8 @@ Audio output is identical to r3:
 
 ### Port to upstream main (after v0.9.1)
 
-This branch is rebuilt on upstream `main` at `c7f5743`, which contains the
-three merged pull requests, but no release tag yet. A published branch will be
+This branch is rebuilt on upstream `main` at `2209425`, which contains the
+four merged pull requests, but no release tag yet. A published branch will be
 made on the next upstream release tag. The v0.9.1 working branch was not
 published; the v0.9.0 branch stays as the latest published one.
 
@@ -133,8 +138,11 @@ From the v0.9.1 branch:
 - **Rewritten:** the CLI and server request fields now pass an embedding as
   the `speaker_embedding_path` request option instead of the removed
   `VoiceReference` fields. They resolve paths and the voice library as before.
-- **Re-applied on upstream's code:** the reference length cap
-  (`max_ref_seconds`), in the reference branch of upstream's `session.cpp`.
+- **Replaced by upstream's #854:** the reference length cap. Only the
+  session option `irodori_tts.max_ref_seconds` remains, as the default for
+  upstream's `max_ref_sec` request option, so existing configs still load
+  (`checkpoint` or unset: upstream's default; `none` / `0`: whole reference; a
+  number: that many seconds). The launcher no longer writes it.
 - Everything else (post-processing, voice listing, `session_option_defaults`,
   `--version`, the launcher, the docs) is cherry-picked unchanged.
 
@@ -146,9 +154,20 @@ What changes for users of this fork:
 - **A checkpoint without a duration predictor** now generates 30 seconds and
   trims the trailing silence when no duration is given, as Python does,
   instead of stopping with an error.
+- **Long references are trimmed by default** (over 120 s on v4, over 30 s on
+  v3), as in Python and upstream. Configs that set
+  `"irodori_tts.max_ref_seconds": "checkpoint"` (the launcher's setting) see no
+  change. To keep the whole reference, set the option to `none`, or send
+  `max_ref_sec: 0` in the request's `options`.
 - **New from upstream:** a voice id that names
   `<model dir>/embeddings/<name>.safetensors` selects that embedding, and
   `speed: 1.0` is accepted (v0.9.1).
+
+The branch was first rebuilt on `c7f5743` (2026-10-09) and again on
+`2209425` after #854 (2026-10-10). The second rebuild had one conflict, from
+upstream's #844 (input artifacts in server and CLI requests), resolved by
+keeping both sides in `app/cli/request.cpp` and `app/server/runtime.cpp`.
+Upstream moved `base64.h` to `app/common/` in the same change.
 
 Upstream's #801 (CUDA transpose convolution, merged right after #835) does not
 affect Irodori-TTS: its codec takes the `col2im` path on CUDA, not the changed
@@ -514,9 +533,9 @@ one-line notice at the top. The modified files are:
 - `app/cli/main.cpp`, `app/cli/request.cpp`
 - `app/server/config.cpp`, `app/server/config.h`, `app/server/main.cpp`, `app/server/runtime.cpp`
 - `app/workflow/execution.cpp`
-- `src/models/irodori_tts/session.cpp` (`max_ref_seconds`)
+- `src/models/irodori_tts/session.cpp` (the `irodori_tts.max_ref_seconds` compatibility option)
 - `model_specs/irodori_tts.json` (JSON has no comments, so this file carries
-  no notice; it declares the `max_ref_seconds` session option)
+  no notice; it declares the `irodori_tts.max_ref_seconds` session option)
 
 New files added by this branch: `app/server/invalid_request.h`,
 `include/cuda_msvc_compat.h`, `include/engine/framework/runtime/post_process.h`,
