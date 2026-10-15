@@ -296,7 +296,7 @@
       {
         "name": "max_ref_seconds",
         "type": "string",
-        "description": "Fork compatibility: default for the max_ref_sec request option. checkpoint (default) keeps upstream's checkpoint ref_max_seconds; none or 0 keeps the whole reference; a number caps it at that many seconds.",
+        "description": "Fork compatibility: default for the reference_duration_sec request option. checkpoint (default) keeps upstream's checkpoint ref_max_seconds; none or 0 keeps the whole reference; a number caps it at that many seconds.",
         "required": false,
         "default": "checkpoint"
       },
