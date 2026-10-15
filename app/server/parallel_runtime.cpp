@@ -2351,9 +2351,13 @@ HttpResponse ParallelServerState::handle_voices(const HttpRequest & request) con
         }
         if (model_idx != SIZE_MAX) { selected = models_.at(model_idx).get(); }
     }
+    // Speaker Inversion embeddings in voice_dir only work with Irodori-TTS, so list
+    // them only for that family.
+    bool lists_speaker_embeddings = false;
     if (selected != nullptr) {
         const auto & model = *selected;
         std::shared_lock<std::shared_mutex> metadata_lock(model.metadata_mutex);
+        lists_speaker_embeddings = model.config.family == "irodori_tts";
         for (const auto & [name, preset] : model.voice_presets) {
             (void) preset;
             voices.push_back(name);
@@ -2372,8 +2376,23 @@ HttpResponse ParallelServerState::handle_voices(const HttpRequest & request) con
         std::error_code ec;
         if (std::filesystem::is_directory(*config_.voice_dir, ec)) {
             for (const auto & entry : std::filesystem::directory_iterator(*config_.voice_dir, ec)) {
-                if (entry.is_regular_file() && entry.path().extension() == ".wav") {
+                if (!entry.is_regular_file()) {
+                    continue;
+                }
+                if (entry.path().extension() == ".wav") {
                     voices.push_back(entry.path().stem().string());
+                } else if (lists_speaker_embeddings && entry.path().extension() == ".safetensors") {
+                    // <name>.speaker.safetensors or <name>.safetensors, as
+                    // resolve_voice_library_embedding() looks them up.
+                    constexpr std::string_view kSpeakerSuffix = ".speaker.safetensors";
+                    const auto filename = entry.path().filename().string();
+                    if (filename.size() > kSpeakerSuffix.size() &&
+                        filename.compare(filename.size() - kSpeakerSuffix.size(), kSpeakerSuffix.size(),
+                                         kSpeakerSuffix) == 0) {
+                        voices.push_back(filename.substr(0, filename.size() - kSpeakerSuffix.size()));
+                    } else {
+                        voices.push_back(entry.path().stem().string());
+                    }
                 }
             }
         }
