@@ -81,9 +81,9 @@ server: the WebUI's Models tab can then download, switch and delete models
 (stored in models\ next to the exe). Models loaded from the WebUI also get the
 memory settings above, because they are in "session_option_defaults".
 While it is on:
-  - the WebUI's voice list offers only upstream's demo voices, so the
-    embeddings in voices\ cannot be picked in the WebUI (test_tts.bat and the
-    API still accept their names);
+  - the WebUI does not list the voices in voices\ (only reference audio
+    files and voices saved in the browser), so the embeddings cannot be
+    picked in the WebUI (test_tts.bat and the API still accept their names);
   - Irodori-TTS v4.1 Anime installs into the same models\Irodori-TTS-v4-Small-GGUF
     folder. That is fine: server_config.json points to the Small file itself.
 A server_config.json made by an older launcher stays as it is; the launcher
@@ -151,8 +151,8 @@ WebUI のモデル管理（任意、v0.9.0 以降のパッケージ）:
   「モデル」タブからモデルのダウンロード・切り替え・削除ができます（保存先は exe と同じ
   フォルダの models\）。メモリの設定は "session_option_defaults" にあるので、WebUI から
   読み込んだモデルにも効きます。有効にしている間は次のようになります。
-  - WebUI の声の一覧は上流のデモ音声だけになり、voices\ の埋め込みは WebUI では選べません
-    （test_tts.bat や API からは名前で使えます）
+  - WebUI に voices\ の声の一覧が出なくなり（参照音声ファイルとブラウザ内に保存した
+    音声だけ）、埋め込みは WebUI では選べません（test_tts.bat や API からは名前で使えます）
   - Irodori-TTS v4.1 Anime は同じ models\Irodori-TTS-v4-Small-GGUF に入りますが、
     server_config.json は Small のファイルを直接指しているので問題ありません
   以前のランチャーで作った server_config.json はそのまま使い、変更が必要な点は起動時に

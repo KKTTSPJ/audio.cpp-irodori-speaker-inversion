@@ -540,10 +540,12 @@ model it was trained on, so retraining on v4 may still improve results.
   that must survive this, such as the memory options of
   [irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md), in
   `session_option_defaults` (see [Port to v0.9.0](#port-to-v090)) rather than
-  in the model's `session_options`. In this mode the WebUI's voice list offers
-  only upstream's demo voices, so voice-library embeddings cannot be picked in
-  the WebUI (the API still accepts their names; with `ui_management` off they
-  appear under "Configured voices").
+  in the model's `session_options`. In this mode the WebUI does not offer the
+  server's voice list (v0.9.0 showed only upstream's demo voices there; from
+  v0.9.2 on there is no list, only reference audio files and voices saved in
+  the browser), so voice-library embeddings cannot be picked in the WebUI (the
+  API still accepts their names; with `ui_management` off they appear under
+  "Configured voices").
 - **One reference only.** Irodori-TTS v4 in Python accepts several reference
   clips (`--ref-wavs`) and concatenates their codec latents. audio.cpp takes a
   single reference clip or a single embedding.
