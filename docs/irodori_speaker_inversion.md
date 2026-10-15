@@ -366,9 +366,14 @@ existing client can be pointed at audio.cpp with few changes.
 | `input` (CLI JSON only) | text | OpenAI-style alias for the text |
 
 Fields can appear at the top level or inside a nested `"irodori": { ... }`
-object. When the same option is given in several places, the precedence is the
-same on the CLI and the server:
+object, the speaker fields (`ref_embed`, `speaker_embedding`, `voice_ref`,
+`ref_wav`) included. When the same option is given in several places, the
+precedence is the same on the CLI and the server:
 **top level > nested `irodori` > `options` object.**
+Irodori-TTS-Server lets the nested object win instead, so give each field in
+one place only. Branches up to v0.9.1 read the speaker fields at the top level
+only; inside `irodori` they were ignored and the request ran without a
+reference.
 
 Irodori-TTS-Server options that audio.cpp does not implement are **not**
 forwarded, so they are silently ignored rather than rejected:
