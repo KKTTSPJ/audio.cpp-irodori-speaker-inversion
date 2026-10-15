@@ -1,4 +1,4 @@
-// Modified by KKTTSPJ, 2026: irodori_tts.max_ref_seconds session option kept as the default for max_ref_sec. See docs/irodori_codec_chunked_decode.md.
+// Modified by KKTTSPJ, 2026: irodori_tts.max_ref_seconds session option kept as the default for reference_duration_sec. See docs/irodori_codec_chunked_decode.md.
 #include "engine/models/irodori_tts/session.h"
 
 #include "engine/framework/debug/profiler.h"
@@ -315,10 +315,11 @@ trim_reference_audio(const runtime::AudioBuffer &audio,
 }
 
 // This fork's session option from before upstream added the max_ref_sec
-// request option (#854). Kept so existing server configs and launcher installs
-// still load: "checkpoint" (or unset) leaves upstream's default, the
-// checkpoint's ref_max_seconds; "none" / "off" / 0 keeps the whole reference;
-// a number caps it at that many seconds. A request's max_ref_sec still wins.
+// request option (#854, now reference_duration_sec). Kept so existing server
+// configs and launcher installs still load: "checkpoint" (or unset) leaves
+// upstream's default, the checkpoint's ref_max_seconds; "none" / "off" / 0
+// keeps the whole reference; a number caps it at that many seconds. A
+// request's reference_duration_sec (or legacy max_ref_sec) still wins.
 std::optional<float>
 session_max_ref_sec(const runtime::SessionOptions &options) {
   const auto value =

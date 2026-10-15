@@ -100,6 +100,16 @@ bool has_direct_voice_reference(const Value &body) {
   return false;
 }
 
+// Points Irodori-TTS at a resolved speaker embedding. It overrides any
+// embedding named in "options", under the current or the legacy option name:
+// upstream reads both and rejects them when they disagree.
+void set_speaker_embedding_option(
+    std::unordered_map<std::string, std::string> &options,
+    const std::filesystem::path &path) {
+  options.erase("speaker_embedding_path");
+  options["speaker_embedding_file"] = path.string();
+}
+
 // "voice" is a name, or an object carrying it as {"id": "<name>"}.
 std::string voice_field_name(const Value &value) {
   if (value.is_object()) {
@@ -259,11 +269,11 @@ build_speech_request(const Value &body, const SpeechRequestContext &context) {
 
   const bool has_explicit_voice_ref = has_direct_voice_reference(body);
   // A resolved speaker file: .safetensors is a Speaker Inversion embedding,
-  // which Irodori-TTS takes as its speaker_embedding_path request option;
+  // which Irodori-TTS takes as its speaker_embedding_file request option;
   // anything else is reference audio.
   auto use_speaker_file = [&](const std::filesystem::path &path) {
     if (is_speaker_embedding_file(path)) {
-      request.options["speaker_embedding_path"] = path.string();
+      set_speaker_embedding_option(request.options, path);
       return;
     }
     if (!voice.speaker.has_value()) {
@@ -281,7 +291,7 @@ build_speech_request(const Value &body, const SpeechRequestContext &context) {
     if (context.voice_dir.has_value() && !has_explicit_voice_ref) {
       if (const auto embedding = resolve_voice_library_embedding(
               *context.voice_dir, voice_name)) {
-        request.options["speaker_embedding_path"] = embedding->string();
+        set_speaker_embedding_option(request.options, *embedding);
         voice_library_resolved = true;
       } else if (const auto wav = resolve_voice_library_wav(*context.voice_dir,
                                                             voice_name)) {
