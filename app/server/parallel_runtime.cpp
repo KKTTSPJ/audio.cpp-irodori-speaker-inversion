@@ -359,6 +359,7 @@ HttpResponse ParallelServerState::handle_model_load(const std::string & body_tex
         requested.slots = static_cast<int>(slots->as_number());
     }
     requested.path = resolve_ui_model_path(engine::io::json::require_string(body, "path"));
+    apply_session_option_defaults(config_, requested);
 
     // Validate metadata/presets before replacing any live state. A failed
     // validation leaves the existing configuration and sessions intact.
