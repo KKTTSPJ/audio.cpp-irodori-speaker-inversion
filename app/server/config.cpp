@@ -263,18 +263,23 @@ ServerConfig load_server_config(const std::filesystem::path & path, bool paralle
         config.model_spec_override = selection == "embedded"
             ? std::filesystem::path(selection) : resolve_path(base, selection);
     }
-    if (const auto * value = root.find("default_session_options")) {
-        if (!value->is_object()) {
-            throw std::runtime_error("server default_session_options must be an object");
+    // "session_option_defaults" is this fork's earlier name for the same field, written by
+    // the launcher of fork releases v0.9.0 to v0.9.2. A key set under the new name wins.
+    for (const std::string name : {"default_session_options", "session_option_defaults"}) {
+        const auto * value = root.find(name);
+        if (value == nullptr) {
+            continue;
         }
-        config.default_session_options = options_from_object(value);
-        for (const auto & [key, option] : config.default_session_options) {
-            (void) option;
+        if (!value->is_object()) {
+            throw std::runtime_error("server " + name + " must be an object");
+        }
+        for (auto & [key, option] : options_from_object(value)) {
             const auto dot = key.find('.');
             if (dot == std::string::npos || dot == 0 || dot + 1 == key.size()) {
                 throw std::runtime_error(
-                    "server default_session_options key must be <family>.<option>: " + key);
+                    "server " + name + " key must be <family>.<option>: " + key);
             }
+            config.default_session_options.emplace(key, std::move(option));
         }
     }
     if (const auto * value = root.find("voice_dir")) {
