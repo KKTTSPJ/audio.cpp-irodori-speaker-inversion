@@ -185,6 +185,10 @@ build_speech_request(const Value &body, const SpeechRequestContext &context) {
     add_option_from_json(request.options, *irodori_obj, "normalize_db",
                          "normalize_db");
     add_option_from_json(request.options, *irodori_obj, "volume", "volume");
+    add_option_from_json(request.options, *irodori_obj, "t_schedule_mode",
+                         "t_schedule_mode");
+    add_option_from_json(request.options, *irodori_obj, "sway_coeff",
+                         "sway_coeff");
   }
 
   add_option_from_json(request.options, body, "seed", "seed");
@@ -212,6 +216,9 @@ build_speech_request(const Value &body, const SpeechRequestContext &context) {
                        "speaker_guidance_scale");
   add_option_from_json(request.options, body, "normalize_db", "normalize_db");
   add_option_from_json(request.options, body, "volume", "volume");
+  add_option_from_json(request.options, body, "t_schedule_mode",
+                       "t_schedule_mode");
+  add_option_from_json(request.options, body, "sway_coeff", "sway_coeff");
   if (const auto *value = body.find("instructions")) {
     request.options["instruction"] = value->as_string();
   }
