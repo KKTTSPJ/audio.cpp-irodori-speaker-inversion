@@ -1,3 +1,4 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "parallel_runtime.h"
 
 #include "audited_model_slots.h"
@@ -24,6 +25,7 @@
 #include "engine/framework/model_spec/options.h"
 #include "engine/framework/model_spec/package.h"
 #include "engine/framework/runtime/errors.h"
+#include "engine/framework/runtime/post_process.h"
 #include "engine/framework/runtime/registry.h"
 
 #include <algorithm>
@@ -889,12 +891,25 @@ ParallelServerState::TimedTaskResult ParallelServerState::run_model(
         throw std::runtime_error("configured model does not provide offline execution: " + model.config.id);
     }
     const auto started = Clock::now();
-    session.prepare(engine::runtime::build_preparation_request(request));
-    auto result = offline->run(request);
+    // Copied because these two options have to come out of the map before the
+    // session sees it: a schema-v1 session rejects every request option its
+    // model spec does not declare, and normalize_db / volume are ours.
+    engine::runtime::TaskRequest model_request = request;
+    const auto post_opts =
+        engine::framework::runtime::take_audio_post_process_options(model_request.options);
+    session.prepare(engine::runtime::build_preparation_request(model_request));
+    auto result = offline->run(model_request);
     // Mark activity at completion too: idle unload must measure from when the
     // request finished, not when it started, or a long inference would look idle
     // (and be unloaded) the moment it returns.
     last_activity_ms_.store(steady_now_ms(), std::memory_order_relaxed);
+
+    if (result.audio_output.has_value()) {
+        engine::framework::runtime::apply_audio_post_process(*result.audio_output, post_opts);
+    }
+    for (auto & named : result.named_audio_outputs) {
+        engine::framework::runtime::apply_audio_post_process(named.audio, post_opts);
+    }
     return TimedTaskResult{std::move(result), elapsed_ms(started), std::nullopt};
 }
 

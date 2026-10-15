@@ -1,4 +1,7 @@
+// Modified by KKTTSPJ, 2026: Irodori-TTS Speaker Inversion support. See docs/irodori_speaker_inversion.md.
 #include "execution.h"
+
+#include "engine/framework/runtime/post_process.h"
 
 #include <chrono>
 #include <stdexcept>
@@ -61,13 +64,28 @@ AppBatchResult run_offline_batch(
     const auto session_start = Clock::now();
 
     const auto prepare_start = Clock::now();
-    session.prepare(engine::runtime::build_preparation_request(batch.requests.front().request));
+    // normalize_db / volume belong to the application, not to the model: a
+    // schema-v1 session rejects request options its spec does not declare, so
+    // they come out of each request before the session sees it (as in the
+    // single-request path) and are applied to the result afterwards.
+    auto prepare_request = batch.requests.front().request;
+    (void) engine::framework::runtime::take_audio_post_process_options(prepare_request.options);
+    session.prepare(engine::runtime::build_preparation_request(prepare_request));
     AppBatchResult out;
     out.prepare_ms = to_ms(Clock::now() - prepare_start);
     out.results.reserve(batch.requests.size());
     for (const auto & item : batch.requests) {
         const auto run_start = Clock::now();
-        auto result = offline.run(item.request);
+        auto request = item.request;
+        const auto post_opts =
+            engine::framework::runtime::take_audio_post_process_options(request.options);
+        auto result = offline.run(request);
+        if (result.audio_output.has_value()) {
+            engine::framework::runtime::apply_audio_post_process(*result.audio_output, post_opts);
+        }
+        for (auto & named : result.named_audio_outputs) {
+            engine::framework::runtime::apply_audio_post_process(named.audio, post_opts);
+        }
         const double wall_ms = to_ms(Clock::now() - run_start);
         out.results.push_back(AppRequestResult{
             item.id,
