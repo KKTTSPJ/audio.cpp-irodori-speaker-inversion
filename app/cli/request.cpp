@@ -221,6 +221,16 @@ void overwrite_option(
     options[option_key] = value;
 }
 
+// The CLI side of the server's set_speaker_embedding_option(): the resolved
+// embedding overrides one named in the options under either option name, which
+// upstream reads both of and rejects when they disagree.
+void set_speaker_embedding_option(
+    std::unordered_map<std::string, std::string> & options,
+    const std::string & path) {
+    options.erase("speaker_embedding_path");
+    options["speaker_embedding_file"] = path;
+}
+
 void overwrite_option_from_json_field(
     std::unordered_map<std::string, std::string> & options,
     const engine::io::json::Value & object,
@@ -386,8 +396,8 @@ engine::runtime::TaskRequest build_request_from_json(
         has_voice = true;
     }
     // A Speaker Inversion embedding goes to the model as its
-    // speaker_embedding_path request option, set once the options exist below.
-    std::optional<std::filesystem::path> speaker_embedding_path;
+    // speaker_embedding_file request option, set once the options exist below.
+    std::optional<std::filesystem::path> speaker_embedding_file;
     // Speaker fields may also sit in a nested "irodori" object, as in
     // Irodori-TTS-Server requests; the top level wins.
     const auto * irodori_fields = value.find("irodori");
@@ -402,7 +412,7 @@ engine::runtime::TaskRequest build_request_from_json(
         if (const auto ref = speaker_field(key)) {
             std::filesystem::path ref_path = resolve_case_path(base_dir, *ref);
             if (ref_path.extension() == ".safetensors") {
-                speaker_embedding_path = ref_path;
+                speaker_embedding_file = ref_path;
             } else {
                 if (!voice.speaker.has_value()) {
                     voice.speaker = engine::runtime::VoiceReference{};
@@ -414,7 +424,7 @@ engine::runtime::TaskRequest build_request_from_json(
     }
     for (const char * key : {"speaker_embedding", "ref_embed"}) {
         if (const auto embedding = speaker_field(key)) {
-            speaker_embedding_path = resolve_case_path(base_dir, *embedding);
+            speaker_embedding_file = resolve_case_path(base_dir, *embedding);
         }
     }
 
@@ -453,8 +463,8 @@ engine::runtime::TaskRequest build_request_from_json(
     request.input_artifacts = json_request_artifacts(value.find("artifacts"), base_dir);
 
     request.options = json_options_map(value.find("options"));
-    if (speaker_embedding_path.has_value()) {
-        overwrite_option(request.options, "speaker_embedding_path", path_arg_string(*speaker_embedding_path));
+    if (speaker_embedding_file.has_value()) {
+        set_speaker_embedding_option(request.options, path_arg_string(*speaker_embedding_file));
     }
     if (!language.empty()) {
         set_option(request.options, "language", language);
@@ -660,7 +670,7 @@ engine::runtime::TaskRequest build_request_from_cli(int argc, char ** argv) {
     }
     request.options = collect_key_value_args(argc, argv, "--request-option");
     if (const auto speaker_emb = find_arg(argc, argv, "--speaker-embedding")) {
-        overwrite_option(request.options, "speaker_embedding_path", *speaker_emb);
+        set_speaker_embedding_option(request.options, *speaker_emb);
     }
     if (!language.empty()) {
         set_option(request.options, "language", language);
