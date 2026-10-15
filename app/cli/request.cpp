@@ -388,8 +388,18 @@ engine::runtime::TaskRequest build_request_from_json(
     // A Speaker Inversion embedding goes to the model as its
     // speaker_embedding_path request option, set once the options exist below.
     std::optional<std::filesystem::path> speaker_embedding_path;
+    // Speaker fields may also sit in a nested "irodori" object, as in
+    // Irodori-TTS-Server requests; the top level wins.
+    const auto * irodori_fields = value.find("irodori");
+    auto speaker_field = [&](const char * key) {
+        auto field = json_optional_string(value, key);
+        if (!field && irodori_fields != nullptr && irodori_fields->is_object()) {
+            field = json_optional_string(*irodori_fields, key);
+        }
+        return field;
+    };
     for (const char * key : {"voice_ref", "ref_wav"}) {
-        if (const auto ref = json_optional_string(value, key)) {
+        if (const auto ref = speaker_field(key)) {
             std::filesystem::path ref_path = resolve_case_path(base_dir, *ref);
             if (ref_path.extension() == ".safetensors") {
                 speaker_embedding_path = ref_path;
@@ -403,7 +413,7 @@ engine::runtime::TaskRequest build_request_from_json(
         }
     }
     for (const char * key : {"speaker_embedding", "ref_embed"}) {
-        if (const auto embedding = json_optional_string(value, key)) {
+        if (const auto embedding = speaker_field(key)) {
             speaker_embedding_path = resolve_case_path(base_dir, *embedding);
         }
     }
