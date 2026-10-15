@@ -39,7 +39,7 @@ $backend = if ($Matches[1] -match 'cuda') { 'cuda' } else { 'cpu' }
 # Fork builds from v0.9.0 on print a "model manager:" line and understand "session_option_defaults"
 # (session options that also reach models the WebUI loads). With "model manager: yes" the WebUI can
 # download and switch models ("ui_management"). The launcher writes it as false: with it on, the
-# WebUI lists only upstream's demo voices, so the embeddings in voices\ cannot be picked there.
+# WebUI does not list the voices in voices\, so the embeddings cannot be picked there.
 $isV090Fork = $versionText -match '(?m)^model manager:'
 $hasModelManager = $versionText -match '(?m)^model manager:\s*yes'
 
