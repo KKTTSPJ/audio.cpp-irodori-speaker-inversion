@@ -74,12 +74,26 @@ bool is_speaker_embedding_file(const std::filesystem::path &path) {
   return extension == ".safetensors";
 }
 
+// A speaker field at the top level of the request, or else inside a nested
+// "irodori" object (where Irodori-TTS-Server clients may put it). The top level
+// wins, as for the option aliases.
+const Value *find_speaker_field(const Value &body, const char *key) {
+  if (const auto *value = body.find(key)) {
+    return value;
+  }
+  if (const auto *irodori = body.find("irodori");
+      irodori != nullptr && irodori->is_object()) {
+    return irodori->find(key);
+  }
+  return nullptr;
+}
+
 // Fields that name a speaker file outright: upstream's voice_ref plus the
 // Irodori-TTS-Server compatible aliases.
 bool has_direct_voice_reference(const Value &body) {
   for (const char *key :
        {"voice_ref", "ref_wav", "ref_embed", "speaker_embedding"}) {
-    if (body.find(key) != nullptr) {
+    if (find_speaker_field(body, key) != nullptr) {
       return true;
     }
   }
@@ -311,7 +325,7 @@ build_speech_request(const Value &body, const SpeechRequestContext &context) {
              : std::string(
                    ", and no voice library (--voice-dir) is configured")));
   };
-  if (const auto *value = body.find("voice_ref")) {
+  if (const auto *value = find_speaker_field(body, "voice_ref")) {
     if (value->is_string()) {
       if (!value->as_string().empty()) {
         use_speaker_file(resolve_direct_ref("voice_ref", value->as_string()));
@@ -356,7 +370,7 @@ build_speech_request(const Value &body, const SpeechRequestContext &context) {
     }
   }
   for (const char *key : {"ref_wav", "ref_embed", "speaker_embedding"}) {
-    if (const auto *value = body.find(key)) {
+    if (const auto *value = find_speaker_field(body, key)) {
       if (!value->is_string()) {
         throw engine::runtime::InvalidRequestError(std::string(key) +
                                                    " must be a path string");
