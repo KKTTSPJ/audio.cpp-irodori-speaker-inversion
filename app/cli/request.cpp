@@ -537,6 +537,8 @@ engine::runtime::TaskRequest build_request_from_json(
             overwrite_option(request.options, "volume", std::to_string(*volume));
         }
         overwrite_option_from_json_field(request.options, *irodori_val, "seed", "seed");
+        overwrite_option_from_json_field(request.options, *irodori_val, "t_schedule_mode", "t_schedule_mode");
+        overwrite_option_from_json_field(request.options, *irodori_val, "sway_coeff", "sway_coeff");
     }
 
     if (const auto duration_seconds = json_optional_float(value, "duration_seconds")) {
@@ -557,6 +559,8 @@ engine::runtime::TaskRequest build_request_from_json(
     if (const auto volume = json_optional_float(value, "volume")) {
         overwrite_option(request.options, "volume", std::to_string(*volume));
     }
+    overwrite_option_from_json_field(request.options, value, "t_schedule_mode", "t_schedule_mode");
+    overwrite_option_from_json_field(request.options, value, "sway_coeff", "sway_coeff");
     if (const auto repaint_start = json_optional_float(value, "repaint_start")) {
         set_option(request.options, "repainting_start", std::to_string(*repaint_start));
     }
