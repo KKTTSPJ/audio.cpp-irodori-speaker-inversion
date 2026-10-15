@@ -280,6 +280,36 @@ void test_default_session_options() {
     }
 }
 
+// Fork: configs written by the fork's v0.9.0-v0.9.2 launcher use the old name.
+void test_session_option_defaults_old_name() {
+    const auto root = make_temp_root();
+    const auto config_path = write_config(root, "server_old_name.json", R"JSON({
+  "default_session_options": {"irodori_tts.codec_decode_chunk_steps": "64"},
+  "session_option_defaults": {
+    "irodori_tts.codec_decode_chunk_steps": "16",
+    "irodori_tts.rf_graph_arena_mb": "128"
+  },
+  "models": [{"id": "tts", "family": "irodori_tts", "path": "models/irodori"}]
+})JSON");
+    const auto config = minitts::server::load_server_config(config_path);
+    const auto & options = config.models.front().session_options;
+    require(options.at("irodori_tts.codec_decode_chunk_steps") == "64", "the new name wins over the old one");
+    require(options.at("irodori_tts.rf_graph_arena_mb") == "128", "the old name still applies");
+
+    const auto bad_path = write_config(root, "server_old_name_bad.json", R"JSON({
+  "session_option_defaults": {"rf_graph_arena_mb": "128"},
+  "models": [{"id": "tts", "family": "irodori_tts", "path": "models/irodori"}]
+})JSON");
+    bool rejected = false;
+    try {
+        (void) minitts::server::load_server_config(bad_path);
+    } catch (const std::runtime_error & error) {
+        rejected = std::string(error.what()).find("session_option_defaults key must be") != std::string::npos;
+    }
+    require(rejected, "old-name keys without a family are rejected under their own name");
+    std::filesystem::remove_all(root);
+}
+
 void test_missing_default_preset_name_is_rejected() {
     const auto root = make_temp_root();
     const auto config_path = write_config(
@@ -929,6 +959,7 @@ int main() {
         test_bad_preset_options_are_rejected();
         test_default_request_options();
         test_default_session_options();
+        test_session_option_defaults_old_name();
         test_missing_default_preset_name_is_rejected();
         test_duplicate_json_keys_are_rejected();
         test_busy_timeout_defaults_and_overrides();
