@@ -1,6 +1,8 @@
 # start_server.ps1 - starts audiocpp_server.exe from the package folder.
-# Creates server_config.json on the first run (edit it freely afterwards; it is never overwritten),
-# then runs the server in this window and opens the WebUI in the browser once it is ready.
+# Creates server_config.json on the first run with every model download_model.bat has fetched.
+# Later runs keep the file as it is, except that models downloaded since then are appended to
+# "models" (the previous file is kept as server_config.json.bak-<time>). Then runs the server in
+# this window and opens the WebUI in the browser once it is ready.
 param([int]$Port = 8090, [switch]$NoBrowser)
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +12,7 @@ $config = Join-Path $root "server_config.json"
 $modelDir = Join-Path $root "models\Irodori-TTS-v4-Small-GGUF"
 $modelFileName = "irodori-tts-v4-small-q8_0.gguf"
 $voiceDir = Join-Path $root "voices"
+. (Join-Path $PSScriptRoot "models.ps1")
 
 function Fail([string]$message) {
   Write-Host ""
@@ -19,6 +22,24 @@ function Fail([string]$message) {
 
 function Has-Property($object, [string]$name) {
   return ($null -ne $object) -and ($object.PSObject.Properties.Name -contains $name)
+}
+
+# Full, lower-case path of a model "path" from server_config.json (relative paths are relative to it).
+function Get-NormalizedPath([string]$path) {
+  $p = $path -replace '/', '\'
+  if (-not [IO.Path]::IsPathRooted($p)) { $p = Join-Path $root $p }
+  return [IO.Path]::GetFullPath($p).TrimEnd('\').ToLowerInvariant()
+}
+
+# A "models" entry for one of the launcher's models (scripts\models.ps1).
+function New-ModelEntry($m) {
+  return [ordered]@{
+    id = $m.Id
+    family = $m.Family
+    path = ((Get-LauncherModelFile $m $root) -replace '\\', '/')
+    task = $m.Task
+    mode = "offline"
+  }
 }
 
 if (-not (Test-Path -LiteralPath $server)) {
@@ -46,16 +67,23 @@ $hasModelManager = $versionText -match '(?m)^model manager:\s*yes'
 New-Item -ItemType Directory -Force -Path $voiceDir | Out-Null
 
 if (-not (Test-Path -LiteralPath $config)) {
-  $models = @(Get-ChildItem -LiteralPath $modelDir -Filter *.gguf -File -ErrorAction SilentlyContinue)
-  if ($models.Count -eq 0) {
-    Fail "No model found in $modelDir`nRun download_model.bat first."
-  }
-  $model = @($models | Where-Object { $_.Name -eq $modelFileName })
-  if ($model.Count -eq 0) {
+  $modelEntries = @(Get-DownloadedLauncherModels $root | ForEach-Object { New-ModelEntry $_ })
+  if ($modelEntries.Count -eq 0) {
+    # No listed model, but maybe a .gguf placed in the default folder by hand.
+    $models = @(Get-ChildItem -LiteralPath $modelDir -Filter *.gguf -File -ErrorAction SilentlyContinue)
+    if ($models.Count -eq 0) {
+      Fail "No model found under $root\models`nRun download_model.bat first."
+    }
     if ($models.Count -gt 1) {
       Fail "More than one .gguf file in $modelDir and none is named $modelFileName`nRun download_model.bat, or keep exactly one model file in that folder."
     }
-    $model = $models
+    $modelEntries = @([ordered]@{
+      id = "irodori-tts"
+      family = "irodori_tts"
+      path = ($models[0].FullName -replace '\\', '/')
+      task = "tts"
+      mode = "offline"
+    })
   }
   $threads = 1
   if ($backend -eq 'cpu') {
@@ -72,13 +100,6 @@ if (-not (Test-Path -LiteralPath $config)) {
     "irodori_tts.codec_encode_chunk_steps" = "100"
     "irodori_tts.codec_weight_type" = "f16"
   }
-  $modelEntry = [ordered]@{
-    id = "irodori-tts"
-    family = "irodori_tts"
-    path = ($model[0].FullName -replace '\\', '/')
-    task = "tts"
-    mode = "offline"
-  }
   $cfg = [ordered]@{
     host = "127.0.0.1"
     port = $Port
@@ -87,19 +108,64 @@ if (-not (Test-Path -LiteralPath $config)) {
     threads = $threads
     ui = $true
   }
+  if ($modelEntries.Count -gt 1) {
+    # Load a model on its first request and keep only one in memory; the WebUI switches between them.
+    $cfg.lazy_load = $true
+    $cfg.max_loaded_models = 1
+  }
   if ($isV090Fork) {
     if ($hasModelManager) { $cfg.ui_management = $false }
     $cfg.session_option_defaults = $memoryOptions
   } else {
-    $modelEntry.session_options = $memoryOptions
+    foreach ($entry in $modelEntries) {
+      if ($entry.family -eq "irodori_tts") { $entry.session_options = $memoryOptions }
+    }
   }
   $cfg.voice_dir = ($voiceDir -replace '\\', '/')
-  $cfg.models = @($modelEntry)
-  [IO.File]::WriteAllText($config, ($cfg | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding $false))
+  $cfg.models = $modelEntries
+  [IO.File]::WriteAllText($config, ($cfg | ConvertTo-Json -Depth 10), (New-Object Text.UTF8Encoding $false))
   Write-Host "Created $config (backend: $backend)"
+  Write-Host ("  models: " + (($modelEntries | ForEach-Object { $_.id }) -join ", "))
 }
 
 $settings = Get-Content -LiteralPath $config -Raw | ConvertFrom-Json
+
+# Append the models downloaded since the config was written. A model whose file is already used
+# by an entry, or whose id is taken (for example by an entry pointing elsewhere), is left alone.
+$configured = @($settings.models)
+$usedPaths = @($configured | Where-Object { Has-Property $_ "path" } | ForEach-Object { Get-NormalizedPath $_.path })
+$usedIds = @($configured | ForEach-Object { $_.id })
+$added = @()
+foreach ($m in (Get-DownloadedLauncherModels $root)) {
+  if ($usedPaths -contains (Get-NormalizedPath (Get-LauncherModelFile $m $root))) { continue }
+  if ($usedIds -contains $m.Id) {
+    Write-Host "Note: $($m.Title) is downloaded, but server_config.json already has a model with id ""$($m.Id)""; not added." -ForegroundColor Yellow
+    continue
+  }
+  $added += New-ModelEntry $m
+}
+if ($added.Count -gt 0) {
+  $backup = "$config.bak-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+  Copy-Item -LiteralPath $config -Destination $backup
+  $settings.models = @($configured + $added)
+  $lazyNote = ""
+  if ($settings.models.Count -gt 1) {
+    if (-not (Has-Property $settings "lazy_load")) {
+      $settings | Add-Member -NotePropertyName lazy_load -NotePropertyValue $true
+      $lazyNote += " lazy_load: true"
+    }
+    if (-not (Has-Property $settings "max_loaded_models")) {
+      $settings | Add-Member -NotePropertyName max_loaded_models -NotePropertyValue 1
+      $lazyNote += " max_loaded_models: 1"
+    }
+  }
+  [IO.File]::WriteAllText($config, ($settings | ConvertTo-Json -Depth 10), (New-Object Text.UTF8Encoding $false))
+  Write-Host ("Added to server_config.json: " + (($added | ForEach-Object { $_.id }) -join ", ")) -ForegroundColor Green
+  if ($lazyNote) {
+    Write-Host ("  Also set" + $lazyNote + " (models load on first use, one at a time).") -ForegroundColor Green
+  }
+  Write-Host "  The previous file is $backup"
+}
 $management = (Has-Property $settings "ui_management") -and $settings.ui_management
 if ($management -and -not $hasModelManager) {
   Fail "server_config.json has ui_management enabled, but this build has no model manager.`n(Use a v0.9.0 or later package, or remove ui_management from the config.)"
@@ -152,6 +218,9 @@ if (-not $NoBrowser) {
 Write-Host ""
 Write-Host "Starting audiocpp_server ($backend) with $config"
 Write-Host "WebUI and API: $url    (close this window or press Ctrl+C to stop)"
+if ((Has-Property $settings "lazy_load") -and $settings.lazy_load) {
+  Write-Host "Models load on their first request, so the first generation takes longer."
+}
 Write-Host ""
 Set-Location -LiteralPath $root
 & $server --config $config
