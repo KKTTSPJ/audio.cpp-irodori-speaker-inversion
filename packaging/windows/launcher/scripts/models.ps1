@@ -75,7 +75,13 @@ $LauncherModels = @(
     "seed-vc" "seed_vc" "vc" $ggufRepo "main" `
     "SeedVC-MLX-GGUF/seed-vc-mlx-q8_0.gguf" "SeedVC-MLX-GGUF\seed-vc-mlx-q8_0.gguf" `
     "GPL-3.0" (@("Seed-VC is released by Plachta under the GNU General Public License v3.0 (copyleft).",
-                 "  Details: https://huggingface.co/Plachta/Seed-VC") + $vcEthics))
+                 "  Details: https://huggingface.co/Plachta/Seed-VC") + $vcEthics)),
+  (New-LauncherModel "miocodec-q8" "MioCodec 25Hz 44.1kHz v2, GGUF Q8_0" "Voice conversion" 0.28 `
+    "miocodec" "miocodec" "vc" $ggufRepo "main" `
+    "MioCodec-25Hz-44.1kHz-v2-GGUF/miocodec-25hz-44khz-v2-q8_0.gguf" "MioCodec-25Hz-44.1kHz-v2-GGUF\miocodec-25hz-44khz-v2-q8_0.gguf" `
+    "MIT" (@("MioCodec is released by Aratako under the MIT License. The file also holds the",
+             "  WavLM Base+ weights (Microsoft) that it uses for speech features.",
+             "  Details: https://huggingface.co/Aratako/MioCodec-25Hz-44.1kHz-v2") + $vcEthics))
 )
 
 function Get-LauncherModelFile($model, [string]$root) {

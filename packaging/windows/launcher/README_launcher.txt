@@ -52,6 +52,7 @@ requests and the name shown in the WebUI.
   Voice conversion (WebUI: Voice conversion tab)
      8  MeanVC2 F32                             id meanvc2
      9  Seed-VC Q8_0                            id seed-vc
+    10  MioCodec 25Hz 44.1kHz v2 Q8_0           id miocodec
 
 The WebUI names models after upstream's catalog. Irodori-TTS v4.1 Anime is kept
 in models\Irodori-TTS-v4.1-Anime-GGUF so that it does not show under the name of
@@ -63,11 +64,14 @@ it before downloading. Note especially:
     no deepfakes). The same applies to voice conversion.
   - CrisperWhisper 2.0: the model AND its transcripts are for NON-COMMERCIAL use
     only. download_model.bat asks you to type "agree" (or pass -AcceptLicense).
-  - Seed-VC: GPL-3.0. Qwen3-ASR and MeanVC2: Apache-2.0.
+  - Seed-VC: GPL-3.0. Qwen3-ASR and MeanVC2: Apache-2.0. MioCodec: MIT.
 
 Speech recognition takes WAV files at any sample rate. CrisperWhisper relies on
 soxr.dll (in the binary packages from v0.9.2 on) to resample to 16 kHz; with an
 older package it accepts 16 kHz audio only.
+
+Voice conversion returns audio at the model's own sample rate: MioCodec
+44.1 kHz, Seed-VC 22.05 kHz, MeanVC2 16 kHz.
 
 The files are stored where upstream's model manager stores the same packages,
 so the WebUI's model management (below) sees them as installed.
@@ -186,7 +190,7 @@ audiocpp_server.exe を、設定ファイルを手で書かずに Irodori-TTS �
     1〜4   音声合成（Irodori-TTS v4.1 Small Q8_0（既定）・Anime、500M v3、
            600M v3 VoiceDesign（WebUI の「声のデザイン」タブ））
     5〜7   音声認識（Qwen3-ASR 0.6B / 1.7B、CrisperWhisper 2.0）
-    8〜9   声質変換（MeanVC2、Seed-VC）
+    8〜10  声質変換（MeanVC2、Seed-VC、MioCodec）
   WebUI はモデルの表示名を上流のカタログから決めます。v4.1 Anime は v4.1 Small と同じ名前で
   表示されないよう models\Irodori-TTS-v4.1-Anime-GGUF に置くので、WebUI では単に
   「Irodori-TTS」と表示されます。
@@ -195,10 +199,12 @@ audiocpp_server.exe を、設定ファイルを手で書かずに Irodori-TTS �
       フェイクを作らない）。声質変換にも同じことが当てはまります
     - CrisperWhisper 2.0: モデルと、その出力（文字起こし）は「非商用」に限られます。
       取得時に agree と入力する必要があります（または -AcceptLicense）
-    - Seed-VC は GPL-3.0、Qwen3-ASR と MeanVC2 は Apache-2.0
+    - Seed-VC は GPL-3.0、Qwen3-ASR と MeanVC2 は Apache-2.0、MioCodec は MIT
   音声認識には任意の標本化周波数の WAV を使えます。CrisperWhisper は 16 kHz への変換に
   soxr.dll（v0.9.2 以降の本体のパッケージに同梱）を使うので、それより前のパッケージでは
   16 kHz の音声だけを受け付けます。
+  声質変換の出力の標本化周波数はモデルごとに決まっています（MioCodec 44.1 kHz、
+  Seed-VC 22.05 kHz、MeanVC2 16 kHz）。
   保存場所は上流のモデル管理と同じなので、WebUI のモデル管理からも取得済みに見えます。
 
 server_config.json
