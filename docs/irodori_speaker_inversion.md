@@ -162,6 +162,27 @@ Added on top of the port:
   by default, and `sway_coeff`). The Irodori-TTS-Server compatible fields now
   pass them on like the other aliases, at the top level or inside `irodori`.
   Before, they were dropped.
+- **packaging: more models in the Windows launcher.** With WebUI model
+  management on, the v0.9.2 WebUI no longer lists the server's voices at all,
+  so the launcher now covers what users would otherwise do there.
+  `download_model.bat` offers a numbered list: Irodori-TTS v4.1 Small Q8_0 (the
+  default), v4.1 Anime, 500M v3, 600M v3 VoiceDesign, Qwen3-ASR 0.6B / 1.7B,
+  CrisperWhisper 2.0 (non-commercial license, accepted by typing `agree`),
+  MeanVC2 and Seed-VC. Files go where upstream's model manager puts the same
+  packages, except v4.1 Anime: the WebUI names a model after the upstream
+  catalog entry it matches, so Anime gets a folder of its own rather than show
+  under the name of v4.1 Small. `start_server.bat` adds every downloaded model to
+  `server_config.json` (on later runs it appends new ones and keeps a backup),
+  with `lazy_load` and `max_loaded_models: 1` once there is more than one, so
+  the WebUI switches between them with model management off and the voice
+  list intact. The model ids follow upstream's WebUI catalog.
+- **packaging: `soxr.dll` in the binary packages.** audio.cpp loads libsoxr at
+  run time when it finds it, and several models resample with it (otherwise
+  linearly); CrisperWhisper accepts audio other than 16 kHz only with it. The
+  packages now include `soxr.dll` built from the unmodified libsoxr 0.1.3
+  source (LGPL-2.1-or-later; source and build script attached to the release).
+  Irodori-TTS does not use it, so its output is unchanged; MeanVC2 and Seed-VC
+  output changes with the better resampling.
 
 What changes for users of this fork:
 
@@ -520,6 +541,10 @@ changes it, identically whether it is given in `options`, at the top level or
 inside `irodori`, on the server and in the CLI. The Windows launcher passes its
 end-to-end check, and the WebUI lists a voice-library embedding under
 "Configured voices" and generates with it. `audio_post_process_test` passes.
+Every model of the launcher's list downloaded, was added to the config, and
+answered a request: the Irodori-TTS models generated speech (the same output
+with and without `soxr.dll`), the three ASR models transcribed a generated
+Japanese sentence correctly, and the VC models converted it.
 
 **v3 embeddings on v4.** An embedding trained against the 500M v3 checkpoint
 loads and runs on v4 Small: both use `speaker_dim = 768`. In a listening test
