@@ -1,4 +1,5 @@
 @echo off
-rem Downloads the Irodori-TTS v4 Small GGUF (Q8_0, about 1.3 GB) into models\Irodori-TTS-v4-Small-GGUF.
+rem Downloads models into models\ from a numbered list (Enter = Irodori-TTS v4.1 Small).
+rem Options: -List, -Model 1,6, -Yes, -AcceptLicense
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\download_model.ps1" %*
 pause
