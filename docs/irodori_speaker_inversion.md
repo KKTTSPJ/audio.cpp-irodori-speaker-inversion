@@ -168,7 +168,9 @@ Added on top of the port:
   `download_model.bat` offers a numbered list: Irodori-TTS v4.1 Small Q8_0 (the
   default), v4.1 Anime, 500M v3, 600M v3 VoiceDesign, Qwen3-ASR 0.6B / 1.7B,
   CrisperWhisper 2.0 (non-commercial license, accepted by typing `agree`),
-  MeanVC2 and Seed-VC. Files go where upstream's model manager puts the same
+  MeanVC2, Seed-VC and MioCodec 25Hz 44.1kHz v2 (added after the v0.9.2
+  release; the only one of the three that returns 44.1 kHz rather than 16 or
+  22.05 kHz). Files go where upstream's model manager puts the same
   packages, except v4.1 Anime: the WebUI names a model after the upstream
   catalog entry it matches, so Anime gets a folder of its own rather than show
   under the name of v4.1 Small. `start_server.bat` adds every downloaded model to
