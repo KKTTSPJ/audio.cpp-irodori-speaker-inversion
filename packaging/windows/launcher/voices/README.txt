@@ -11,9 +11,10 @@ Test:         test_tts.bat "text" name
 
 If both name.speaker.safetensors and name.wav exist, the embedding is used.
 The WebUI lists both under "Configured voices" (v0.8.2-r4 and later; r3 lists
-only the .wav files). If you turn on WebUI model management ("ui_management":
-true in server_config.json), the WebUI no longer lists them; the names here
-still work through the API and test_tts.bat.
+only the .wav files). In v0.9.0 to v0.9.2 packages, WebUI model management
+("ui_management": true in server_config.json) hides them from the WebUI; the
+names here still work through the API and test_tts.bat. Later packages list
+them with model management on as well, once a model is selected.
 Note: if no file matches the name (for example a typo), the server does not
 report an error and generates without a reference. test_tts.bat checks the name.
 
@@ -22,8 +23,10 @@ report an error and generates without a reference. test_tts.bat checks the name.
   name.wav                  参照音声（1 人の話者、数秒〜30 秒程度）
   name.speaker.safetensors  Irodori-TTS の Speaker Inversion 埋め込み（このフォーク）
 同じ名前の両方がある場合は埋め込みが使われます。WebUI の声の一覧（Configured voices）
-には両方が表示されます（v0.8.2-r4 以降。r3 では .wav だけ）。WebUI のモデル管理を
-有効にすると（server_config.json の "ui_management": true）一覧には表示されなく
-なりますが、ここの名前は API と test_tts.bat でそのまま使えます。
+には両方が表示されます（v0.8.2-r4 以降。r3 では .wav だけ）。v0.9.0〜v0.9.2 の
+パッケージでは、WebUI のモデル管理を有効にすると（server_config.json の
+"ui_management": true）一覧には表示されなくなりますが、ここの名前は API と test_tts.bat
+でそのまま使えます。それより後のパッケージでは、モデル管理が有効でもモデルを選べば
+表示されます。
 注意: 名前に合うファイルが無い場合（打ち間違いなど）、サーバーはエラーにせず参照なしで
 生成します。test_tts.bat は名前を事前に確認します。
