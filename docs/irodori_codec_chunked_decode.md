@@ -87,10 +87,12 @@ audiocpp_cli ... --session-option irodori_tts.codec_decode_chunk_steps=100 --ses
 The options work with existing GGUF packages; their embedded model spec does
 not list them, and the session accepts them anyway.
 
-From v0.9.0 on, the server config can also hold them as
-`"session_option_defaults"` (top level, same keys). They then apply to every
-Irodori-TTS model that does not set them itself, including models the WebUI
-loads with `ui_management`, which otherwise run without them.
+The server config can also hold them as `"default_session_options"` (top
+level, same keys; upstream's name since #944, after v0.9.2). This fork's
+v0.9.0 to v0.9.2 builds call it `"session_option_defaults"`, and later builds
+still read that name. They then apply to every Irodori-TTS model that does not
+set them itself, including models the WebUI loads with `ui_management`, which
+otherwise run without them.
 
 ### How it works
 
@@ -285,9 +287,11 @@ audiocpp_cli ... --session-option irodori_tts.codec_decode_chunk_steps=100 --ses
 既存の GGUF パッケージでも使える。埋め込まれたモデル仕様には載っていないが、
 セッションは受け付ける。
 
-v0.9.0 からは、サーバー設定の最上位の `"session_option_defaults"` にも同じキーで
-書ける。自分で指定していないすべての Irodori-TTS のモデルに当たり、`ui_management` で
-WebUI が読み込むモデル（これが無いとオプションなしで動く）にも効く。
+サーバー設定の最上位の `"default_session_options"` にも同じキーで書ける（v0.9.2 より
+後の上流の名前、#944）。このフォークの v0.9.0〜v0.9.2 では `"session_option_defaults"` と
+いう名前で、後の版もこの名前を読む。自分で指定していないすべての Irodori-TTS のモデルに
+当たり、`ui_management` で WebUI が読み込むモデル（これが無いとオプションなしで動く）にも
+効く。
 
 ### 仕組み
 
