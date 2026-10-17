@@ -5,6 +5,8 @@
 //   - normalize_db > 0 goes through the soft limiter instead of hard-clipping
 //   - normalize_db == 0.0 still lands on exactly 0 dBFS (not pulled to ~0.988)
 //   - no options at all is a genuine no-op
+// and the streaming split added on 2026-10-17: volume applied delta by delta
+// equals volume applied to the whole signal, normalize_db is left out of it.
 
 #include "engine/framework/runtime/post_process.h"
 
@@ -13,12 +15,15 @@
 #include <iostream>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
 
 using engine::framework::runtime::AudioPostProcessOptions;
 using engine::framework::runtime::apply_audio_post_process;
+using engine::framework::runtime::audio_post_process_is_noop;
+using engine::framework::runtime::streaming_delta_post_process_options;
 using engine::runtime::AudioBuffer;
 
 int g_failures = 0;
@@ -167,6 +172,63 @@ void test_empty_and_silent_buffers() {
     }
 }
 
+void test_streaming_delta_options_drop_only_normalization() {
+    AudioPostProcessOptions options;
+    options.normalize_db = -0.1F;
+    options.volume = 0.8F;
+    const auto delta = streaming_delta_post_process_options(options);
+    check(std::isnan(delta.normalize_db), "delta options drop normalize_db");
+    check(delta.volume == 0.8F, "delta options keep volume");
+
+    AudioPostProcessOptions normalize_only;
+    normalize_only.normalize_db = -0.1F;
+    check(!audio_post_process_is_noop(normalize_only), "normalize_db alone is not a no-op");
+    check(audio_post_process_is_noop(streaming_delta_post_process_options(normalize_only)),
+          "normalize_db alone leaves nothing to apply per delta");
+    check(audio_post_process_is_noop(AudioPostProcessOptions{}), "no options is a no-op");
+}
+
+void test_volume_per_delta_matches_whole_signal() {
+    // Includes samples past the soft knee once boosted, so the limiter is covered too.
+    const std::vector<float> samples = {0.1F, -0.45F, 0.6F, -0.2F, 0.9F, 0.05F, -0.7F};
+    for (const float volume : {0.8F, 1.5F, 0.0F}) {
+        AudioPostProcessOptions options;
+        options.volume = volume;
+        AudioBuffer whole = make_buffer(samples);
+        apply_audio_post_process(whole, options);
+
+        std::vector<float> joined;
+        for (const auto & range : {std::pair<size_t, size_t>{0, 3}, {3, 4}, {4, 7}}) {
+            engine::runtime::StreamEvent event;
+            event.audio_output = make_buffer(
+                std::vector<float>(samples.begin() + range.first, samples.begin() + range.second));
+            apply_audio_post_process(event, streaming_delta_post_process_options(options));
+            joined.insert(joined.end(), event.audio_output->samples.begin(), event.audio_output->samples.end());
+        }
+        check(joined == whole.samples, "volume per delta equals volume on the whole signal");
+    }
+}
+
+void test_result_and_event_overloads_cover_named_outputs() {
+    AudioPostProcessOptions options;
+    options.volume = 0.5F;
+
+    engine::runtime::TaskResult result;
+    result.audio_output = make_buffer({0.4F});
+    result.named_audio_outputs.push_back({"vocals", make_buffer({0.2F})});
+    apply_audio_post_process(result, options);
+    check_close(result.audio_output->samples[0], 0.2F, 1e-6F, "result audio_output is processed");
+    check_close(result.named_audio_outputs[0].audio.samples[0], 0.1F, 1e-6F,
+                "result named outputs are processed");
+
+    engine::runtime::StreamEvent event;
+    event.named_audio_outputs.push_back({"vocals", make_buffer({0.6F})});
+    apply_audio_post_process(event, options);
+    check(!event.audio_output.has_value(), "an event without audio_output stays without it");
+    check_close(event.named_audio_outputs[0].audio.samples[0], 0.3F, 1e-6F,
+                "event named outputs are processed");
+}
+
 }  // namespace
 
 int main() {
@@ -178,6 +240,9 @@ int main() {
     test_volume_zero_and_negative_mute();
     test_mute_wins_over_normalization();
     test_empty_and_silent_buffers();
+    test_streaming_delta_options_drop_only_normalization();
+    test_volume_per_delta_matches_whole_signal();
+    test_result_and_event_overloads_cover_named_outputs();
 
     if (g_failures != 0) {
         std::cerr << g_failures << " check(s) failed\n";
