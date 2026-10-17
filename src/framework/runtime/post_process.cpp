@@ -76,6 +76,34 @@ void apply_audio_post_process(AudioBuffer &audio, const AudioPostProcessOptions 
   }
 }
 
+void apply_audio_post_process(engine::runtime::TaskResult &result, const AudioPostProcessOptions &options) {
+  if (result.audio_output.has_value()) {
+    apply_audio_post_process(*result.audio_output, options);
+  }
+  for (auto &named : result.named_audio_outputs) {
+    apply_audio_post_process(named.audio, options);
+  }
+}
+
+void apply_audio_post_process(engine::runtime::StreamEvent &event, const AudioPostProcessOptions &options) {
+  if (event.audio_output.has_value()) {
+    apply_audio_post_process(*event.audio_output, options);
+  }
+  for (auto &named : event.named_audio_outputs) {
+    apply_audio_post_process(named.audio, options);
+  }
+}
+
+bool audio_post_process_is_noop(const AudioPostProcessOptions &options) {
+  return std::isnan(options.normalize_db) && options.volume == 1.0f;
+}
+
+AudioPostProcessOptions streaming_delta_post_process_options(const AudioPostProcessOptions &options) {
+  AudioPostProcessOptions out = options;
+  out.normalize_db = std::numeric_limits<float>::quiet_NaN();
+  return out;
+}
+
 AudioPostProcessOptions
 take_audio_post_process_options(std::unordered_map<std::string, std::string> &options) {
   AudioPostProcessOptions out;
