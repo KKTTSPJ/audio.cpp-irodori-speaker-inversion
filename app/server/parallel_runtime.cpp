@@ -904,12 +904,7 @@ ParallelServerState::TimedTaskResult ParallelServerState::run_model(
     // (and be unloaded) the moment it returns.
     last_activity_ms_.store(steady_now_ms(), std::memory_order_relaxed);
 
-    if (result.audio_output.has_value()) {
-        engine::framework::runtime::apply_audio_post_process(*result.audio_output, post_opts);
-    }
-    for (auto & named : result.named_audio_outputs) {
-        engine::framework::runtime::apply_audio_post_process(named.audio, post_opts);
-    }
+    engine::framework::runtime::apply_audio_post_process(result, post_opts);
     return TimedTaskResult{std::move(result), elapsed_ms(started), std::nullopt};
 }
 
@@ -934,7 +929,22 @@ ParallelServerState::TimedTaskResult ParallelServerState::run_streaming_model_im
         throw std::runtime_error("configured model does not provide streaming execution: " + model.config.id);
     }
     const auto started = Clock::now();
-    session.prepare(engine::runtime::build_preparation_request(request));
+    // normalize_db / volume come out of the map for the same reason as in
+    // run_model. When the caller takes the audio delta by delta (event_sink),
+    // only volume can be applied to each delta: normalize_db needs the peak of
+    // the whole signal, which is not known until the deltas have gone out, so a
+    // stream is sent without it. The final result is the whole signal and gets
+    // both, which is what a WAV request on a streaming entry returns.
+    engine::runtime::TaskRequest model_request = request;
+    const auto post_opts =
+        engine::framework::runtime::take_audio_post_process_options(model_request.options);
+    const auto delta_opts = engine::framework::runtime::streaming_delta_post_process_options(post_opts);
+    const bool process_deltas = event_sink && !engine::framework::runtime::audio_post_process_is_noop(delta_opts);
+    if (event_sink && !std::isnan(post_opts.normalize_db)) {
+        std::cerr << "[server] streaming output: normalize_db=" << post_opts.normalize_db
+                  << " is not applied to streamed audio (it needs the whole signal's peak)\n";
+    }
+    session.prepare(engine::runtime::build_preparation_request(model_request));
     TimedTaskResult timed_result;
     const bool diarization = model.task.task == engine::runtime::VoiceTaskKind::Diarization;
     const auto sink = [&](const engine::runtime::StreamEvent & event) {
@@ -942,13 +952,18 @@ ParallelServerState::TimedTaskResult ParallelServerState::run_streaming_model_im
             (stream_event_has_output(event) || (diarization && !event.speaker_turns.empty()))) {
             timed_result.ttft_ms = elapsed_ms(started);
         }
-        if (event_sink) {
+        if (process_deltas && (event.audio_output.has_value() || !event.named_audio_outputs.empty())) {
+            auto processed = event;
+            engine::framework::runtime::apply_audio_post_process(processed, delta_opts);
+            event_sink(processed);
+        } else if (event_sink) {
             event_sink(event);
         }
     };
     auto result = audio != nullptr
-        ? minitts::app::run_streaming_task(*streaming, request, sink, *audio)
-        : minitts::app::run_streaming_task(*streaming, request, sink);
+        ? minitts::app::run_streaming_task(*streaming, model_request, sink, *audio)
+        : minitts::app::run_streaming_task(*streaming, model_request, sink);
+    engine::framework::runtime::apply_audio_post_process(result, post_opts);
     timed_result.result = std::move(result);
     timed_result.wall_ms = elapsed_ms(started);
     if (!timed_result.ttft_ms.has_value() &&

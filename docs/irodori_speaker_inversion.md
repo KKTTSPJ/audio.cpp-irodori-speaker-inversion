@@ -198,8 +198,10 @@ What changes for users of this fork:
   `options` as unknown, and dropped them as compatibility fields.
 - **Streaming output** (#881): an Irodori-TTS model configured with
   `"mode": "streaming"` can send audio as it is decoded (request option
-  `stream_frames_per_event`). `normalize_db` / `volume` are not applied there;
-  see [Known limitations](#known-limitations).
+  `stream_frames_per_event`). This fork's `normalize_db` / `volume` work on
+  such a model too: a WAV request gets both on the whole result, and a
+  stream (`stream: true` / `stream_format`) gets `volume` on every audio delta
+  but not `normalize_db`; see [Known limitations](#known-limitations).
 - **`--parallel-jobs`** carries this fork's server changes (above).
 
 Upstream changed the Irodori-TTS sources between `2209425` and v0.9.2 for the
@@ -543,6 +545,12 @@ changes it, identically whether it is given in `options`, at the top level or
 inside `irodori`, on the server and in the CLI. The Windows launcher passes its
 end-to-end check, and the WebUI lists a voice-library embedding under
 "Configured voices" and generates with it. `audio_post_process_test` passes.
+On a `"mode": "streaming"` model with `stream_frames_per_event: 100` (the
+window of `codec_decode_chunk_steps: 100`), a WAV request gives the same
+output as the offline model with `normalize_db`, `volume` and both, an SSE or
+raw-PCM stream with `volume` gives the same samples, and a stream with
+`normalize_db` gives the samples of the request without it, in both server
+runtimes (fix of 2026-10-17).
 Every model of the launcher's list downloaded, was added to the config, and
 answered a request: the Irodori-TTS models generated speech (the same output
 with and without `soxr.dll`), the three ASR models transcribed a generated
@@ -576,11 +584,14 @@ model it was trained on, so retraining on v4 may still improve results.
 - **One reference only.** Irodori-TTS v4 in Python accepts several reference
   clips (`--ref-wavs`) and concatenates their codec latents. audio.cpp takes a
   single reference clip or a single embedding.
-- **Post-processing in streaming mode.** `normalize_db` / `volume` are
-  applied to a finished result only. A model configured with
-  `"mode": "streaming"` passes them to Irodori-TTS, which rejects them as
-  unknown options. Keep such models in the default `"offline"` mode when the
-  post-processing is needed.
+- **No `normalize_db` on streamed audio.** Peak normalisation needs the peak
+  of the whole signal, which is not known while the audio is still being sent.
+  A request that streams the audio from a `"mode": "streaming"` model
+  (`stream: true` or `stream_format`) is answered without it, and the server
+  logs one line saying so; `volume` is still applied to every delta. A WAV
+  request on the same model is normalised as in offline mode. (The first v0.9.2
+  build passed both options to Irodori-TTS on a streaming model, which rejected
+  them as unknown options.)
 - **Checkpoints without `duration_predictor` weights** generate 30 seconds and
   trim the trailing silence unless a duration is given (`duration_seconds` /
   `seconds` / `--duration-seconds`); pass one when the length is known.
