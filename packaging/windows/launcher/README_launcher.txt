@@ -92,8 +92,9 @@ The server listens on 127.0.0.1 only (this PC). It has no authentication: do not
 change "host" to "0.0.0.0" unless the network is trusted.
 
 Memory settings. The config enables the options that bound the peak memory of
-Irodori-TTS, under "session_option_defaults" (packages from v0.9.0 on; older
-packages put them under "session_options" of the model):
+Irodori-TTS, under "default_session_options" (packages after v0.9.2;
+"session_option_defaults" in v0.9.0 to v0.9.2, which later packages still
+read; older packages put them under "session_options" of the model):
 
   "irodori_tts.codec_decode_chunk_steps": "100"   decode audio in 4 s windows
   "irodori_tts.codec_encode_chunk_steps": "100"   encode reference audio in 4 s windows
@@ -126,22 +127,23 @@ in the repository.
 Model management in the WebUI (optional, v0.9.0 packages and later)
 -------------------------------------------------------------------
 The packages are built with upstream's model manager. start_server.bat writes
-  "ui_management": false,
-into server_config.json, so the WebUI keeps showing the voices in voices\
-(reference WAVs and Speaker Inversion embeddings) under "Configured voices",
-and lists the models of server_config.json. To use upstream's model management
-instead, change it to true and restart the server: the WebUI's Models tab can
-then download, switch and delete models (stored in models\ next to the exe).
-Models loaded from the WebUI also get the memory settings above, because they
-are in "session_option_defaults". While it is on:
-  - the WebUI does not list the voices in voices\ (only reference audio
-    files and voices saved in the browser), so the embeddings cannot be
-    picked in the WebUI (test_tts.bat and the API still accept their names);
+  "ui_management": true,
+into server_config.json (packages after v0.9.2; v0.9.0 to v0.9.2 wrote false),
+so the WebUI's Models tab can download, switch and delete models (stored in
+models\ next to the exe) besides the models of server_config.json. Models
+loaded from the WebUI also get the memory settings above. Once a model is
+selected, the WebUI lists the voices in voices\ (reference WAVs and Speaker
+Inversion embeddings) under "Configured voices"; the WAVs can be previewed.
+Notes:
   - Irodori-TTS v4.1 Anime and F16 install into the same
     models\Irodori-TTS-v4-Small-GGUF folder. That is fine: server_config.json
     points to each file itself. (download_model.bat keeps Anime in a folder of
     its own instead, so the model manager does not see it as installed.)
-download_model.bat is the way to add models while keeping the voice list.
+  - To turn model management off, change it to false and restart the server.
+    The WebUI then lists only the models of server_config.json.
+  - With v0.9.0 to v0.9.2 packages, model management hides the voices in
+    voices\ from the WebUI (the API and test_tts.bat still accept the names),
+    so those packages leave it off.
 A server_config.json made by an older launcher stays as it is; the launcher
 prints what to change. The WebUI has a Japanese interface (Interface language).
 
@@ -220,7 +222,8 @@ server_config.json
 
 メモリの設定
   Irodori-TTS の使用メモリのピークを抑える 3 つのオプションを有効にしています（上の
-  英語の節の 3 行。v0.9.0 以降のパッケージでは "session_option_defaults"、それより前は
+  英語の節の 3 行。v0.9.2 より後のパッケージでは "default_session_options"、v0.9.0〜v0.9.2
+  では "session_option_defaults"（後のパッケージもこの名前を読みます）、それより前は
   モデルの "session_options" の中）。短文でも長文でも GPU のメモリは約 2 GB にとどまります
   （Irodori-TTS v4、RTX 5060 Ti。無効だと 26 秒の出力で 6.2 GB）。出力の違いはごくわずか
   です。すべての Irodori-TTS のモデルに効き、他のモデルには影響しません。
@@ -229,23 +232,23 @@ server_config.json
   リポジトリの docs/irodori_codec_chunked_decode.md にあります。
 
 参照音声・Speaker Inversion の埋め込みは voices\ に置き、ファイル名で指定します
-（voices\README.txt）。WebUI の声の一覧（Configured voices）にも表示されます
-（"ui_management" が false のとき。ランチャーの既定）。
+（voices\README.txt）。WebUI でモデルを選ぶと、声の一覧（Configured voices）にも
+表示されます。
 
 WebUI のモデル管理（任意、v0.9.0 以降のパッケージ）:
   バイナリは上流のモデルマネージャ付きでビルドしています。start_server.bat は
-  server_config.json に "ui_management": false, と書くので、WebUI の声の一覧
-  （Configured voices）には voices\ の参照音声と Speaker Inversion の埋め込みが出て、
-  モデルの一覧には server_config.json のモデルが出ます。
-  上流のモデル管理を使いたい場合は true に変えてサーバーを再起動してください。WebUI の
-  「モデル」タブからモデルのダウンロード・切り替え・削除ができます（保存先は exe と同じ
-  フォルダの models\）。メモリの設定は "session_option_defaults" にあるので、WebUI から
-  読み込んだモデルにも効きます。有効にしている間は次のようになります。
-  - WebUI に voices\ の声の一覧が出なくなり（参照音声ファイルとブラウザ内に保存した
-    音声だけ）、埋め込みは WebUI では選べません（test_tts.bat や API からは名前で使えます）
+  server_config.json に "ui_management": true, と書きます（v0.9.2 より後のパッケージ。
+  v0.9.0〜v0.9.2 は false）。WebUI の「モデル」タブから、server_config.json のモデルに
+  加えて、モデルのダウンロード・切り替え・削除ができます（保存先は exe と同じフォルダの
+  models\）。WebUI から読み込んだモデルにもメモリの設定が効きます。モデルを選ぶと、
+  声の一覧（Configured voices）に voices\ の参照音声と Speaker Inversion の埋め込みが
+  出ます（参照音声は試聴もできます）。
   - Irodori-TTS v4.1 の Anime と F16 は同じ models\Irodori-TTS-v4-Small-GGUF に入りますが、
     server_config.json はそれぞれのファイルを直接指しているので問題ありません
     （download_model.bat は Anime を専用のフォルダに置くので、モデル管理からは未取得に見えます）
-  声の一覧を残したままモデルを増やすには download_model.bat を使ってください。
+  - モデル管理を止めるには false に変えてサーバーを再起動してください。モデルの一覧には
+    server_config.json のモデルだけが出ます。
+  - v0.9.0〜v0.9.2 のパッケージでは、モデル管理を有効にすると WebUI に voices\ の声が
+    出なくなるため（API と test_tts.bat では名前で使えます）、既定で無効にしています。
   以前のランチャーで作った server_config.json はそのまま使い、変更が必要な点は起動時に
   表示します。WebUI の日本語表示は Interface language から選べます。

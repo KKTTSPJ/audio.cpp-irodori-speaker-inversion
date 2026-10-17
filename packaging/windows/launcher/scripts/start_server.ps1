@@ -57,12 +57,18 @@ if ($versionText -notmatch 'backends:\s*([^\r\n]+)') {
   Fail "Unexpected output of 'audiocpp_server.exe --version':`n$versionText"
 }
 $backend = if ($Matches[1] -match 'cuda') { 'cuda' } else { 'cpu' }
-# Fork builds from v0.9.0 on print a "model manager:" line and understand "session_option_defaults"
-# (session options that also reach models the WebUI loads). With "model manager: yes" the WebUI can
-# download and switch models ("ui_management"). The launcher writes it as false: with it on, the
-# WebUI does not list the voices in voices\, so the embeddings cannot be picked there.
+# Fork builds from v0.9.0 on print a "model manager:" line and take session options that also reach
+# models the WebUI loads: "default_session_options" (upstream's name) after v0.9.2, and the fork's
+# earlier name "session_option_defaults" up to v0.9.2 (later builds still read it). With
+# "model manager: yes" the WebUI can download and switch models ("ui_management"). The launcher turns
+# it on for builds after v0.9.2 only: up to v0.9.2 the WebUI then did not list the voices in voices\.
 $isV090Fork = $versionText -match '(?m)^model manager:'
 $hasModelManager = $versionText -match '(?m)^model manager:\s*yes'
+$isAfterV092 = $false
+if ($versionText -match '^audio\.cpp (\d+)\.(\d+)\.(\d+)') {
+  $isAfterV092 = [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])" -gt [version]"0.9.2"
+}
+$sessionDefaultsKey = if ($isAfterV092) { "default_session_options" } else { "session_option_defaults" }
 
 New-Item -ItemType Directory -Force -Path $voiceDir | Out-Null
 
@@ -114,8 +120,8 @@ if (-not (Test-Path -LiteralPath $config)) {
     $cfg.max_loaded_models = 1
   }
   if ($isV090Fork) {
-    if ($hasModelManager) { $cfg.ui_management = $false }
-    $cfg.session_option_defaults = $memoryOptions
+    if ($hasModelManager) { $cfg.ui_management = $isAfterV092 }
+    $cfg[$sessionDefaultsKey] = $memoryOptions
   } else {
     foreach ($entry in $modelEntries) {
       if ($entry.family -eq "irodori_tts") { $entry.session_options = $memoryOptions }
@@ -191,9 +197,10 @@ if ($hasModelManager -and -not $management) {
   Write-Host ('Note: WebUI model management (download / switch models) can be turned on with' + "`n" +
               '      "ui_management": true in server_config.json; see README_launcher.txt.') -ForegroundColor Yellow
 }
-if ($management -and -not (Has-Property $settings "session_option_defaults")) {
+if ($management -and -not (Has-Property $settings "default_session_options") -and
+    -not (Has-Property $settings "session_option_defaults")) {
   Write-Host ('Note: models loaded from the WebUI run without the memory options. Move them from "session_options"' + "`n" +
-              '      to "session_option_defaults" in server_config.json; see README_launcher.txt.') -ForegroundColor Yellow
+              "      to ""$sessionDefaultsKey"" in server_config.json; see README_launcher.txt.") -ForegroundColor Yellow
 }
 $urlHost = if ($settings.host -eq "0.0.0.0") { "127.0.0.1" } else { $settings.host }
 $url = "http://${urlHost}:$($settings.port)/"
