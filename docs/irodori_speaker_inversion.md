@@ -28,8 +28,8 @@ This branch builds on those and keeps what upstream does not have: the
 Irodori-TTS-Server compatible request fields and embeddings in the server's
 voice library, output post-processing (`normalize_db` / `volume`), the old
 session option of the reference length cap (`irodori_tts.max_ref_seconds`,
-kept so existing configs still load), `session_option_defaults`, and the
-Windows launcher. It is a personal fork, published so that anyone who needs
+kept so existing configs still load), the old name `session_option_defaults`
+of upstream's `default_session_options`, and the Windows launcher. It is a personal fork, published so that anyone who needs
 these can read the changes or check out and build this branch.
 
 ## Base version
@@ -37,6 +37,7 @@ these can read the changes or check out and build this branch.
 | | |
 |---|---|
 | Based on | audio.cpp **`v0.9.2`**, the first release with the merged pull requests above. See [Port to v0.9.2](#port-to-v092). |
+| Working branch | The working branch was rebuilt on upstream `main` after v0.9.2 (`03d1b46`), with three more of this fork's pull requests merged; it is not published. See [Port to upstream main (after v0.9.2)](#port-to-upstream-main-after-v092). |
 | Older bases | The working branch on upstream `main` between v0.9.1 and v0.9.2 was not published; see [Port to upstream main](#port-to-upstream-main-after-v091). Branch `irodori-speaker-inversion/v0.9.0` (tag `irodori-speaker-inversion-v0.9.0`) carries the same feature on `v0.9.0`, with this fork's own implementation of the parts that are now upstream. Branch `irodori-speaker-inversion/v0.8.2` (tags `irodori-speaker-inversion-v0.8.2` to `-r4`) carries the same feature on `v0.8.2`, and `irodori-speaker-inversion/v0.5.1` on `release-0.5.1`. They stay as they are; this branch is a port, not a replacement of their history. See [Port to v0.9.1](#port-to-v091) (not published) and [Port to v0.9.0](#port-to-v090). |
 
 ## What this branch changes
@@ -120,6 +121,41 @@ Audio output is identical to r3:
   [packaging/windows/README.md](../packaging/windows/README.md)): scripts that
   download the model, create a server config with the memory options on, and
   start the server with the WebUI. Also published as a release asset of r3 and r4.
+
+### Port to upstream main (after v0.9.2)
+
+The working branch was rebuilt on upstream `main` at `03d1b46` (31 commits
+after v0.9.2). It is not published; the next release will be based on
+upstream's next tag. Upstream merged three more pull requests from this fork:
+
+- [#941](https://github.com/0xShug0/audio.cpp/pull/941) and
+  [#943](https://github.com/0xShug0/audio.cpp/pull/943): with WebUI model
+  management (`ui_management`) on, the WebUI lists the server's voices for the
+  selected model instead of only its demo voices, previews the WAVs of the
+  voice library in both modes, and hides a preview that cannot be played (an
+  embedding).
+- [#944](https://github.com/0xShug0/audio.cpp/pull/944): the top-level server
+  config `default_session_options`, upstream's version of this fork's
+  `session_option_defaults`.
+
+From the v0.9.2 branch:
+
+- **Replaced by upstream's #944:** `session_option_defaults`. The commit now
+  only keeps reading the old name: its entries go into
+  `default_session_options` with the same `<family>.<option>` check (keys
+  without a family are now rejected, as upstream does), and a key set under
+  the new name wins.
+- **Windows launcher:** for a build after v0.9.2 `start_server` writes the
+  memory options as `default_session_options` and turns model management on
+  (`"ui_management": true`), since the WebUI now lists the voice library in
+  that mode. For v0.9.0 to v0.9.2 builds it still writes
+  `session_option_defaults` and `false`. It reads the version from
+  `audiocpp_server --version`.
+- Everything else (the request fields and the voice-library embeddings,
+  post-processing, `--version`, the docs) is cherry-picked unchanged.
+  Upstream's [#942](https://github.com/0xShug0/audio.cpp/pull/942), still
+  open, takes another route for named embeddings (an `options` map in
+  `voice_presets`); the voice-library embeddings stay in this fork.
 
 ### Port to v0.9.2
 
@@ -531,6 +567,17 @@ is given by path, `voice_ref`, `ref_embed` / `speaker_embedding`, or a voice
 library name. `audio_post_process_test` passes, and the WebUI reload check of
 `session_option_defaults` gives the same result as before.
 
+**Upstream main after v0.9.2 (`03d1b46`).** Built the same way, the output
+is bit-identical to v0.9.2 for the same CUDA requests (default options, the
+four memory options, and the production-style config) and CPU requests. The
+WebUI reload check gives the configured output with the memory options under
+either `default_session_options` or `session_option_defaults`, in both server
+runtimes. The compatibility fields, post-processing and streaming give the
+same outputs and the same 400 answers as before (the streamed audio is
+identical; only the reported timing differs). With model management on, the
+WebUI lists a reference WAV and an embedding of the voice library for
+Irodori-TTS, previews the WAV, and generates with the embedding.
+
 **v0.9.2.** Built the same way, the output is bit-identical to the working
 branch on upstream `main` (and so to v0.9.0) for the same CUDA requests
 (default options, the four memory options, and the production-style config)
@@ -565,22 +612,20 @@ model it was trained on, so retraining on v4 may still improve results.
 
 ## Known limitations
 
-- **WebUI model management: session options and the voice list.** With
-  `ui_management` on, the WebUI lists upstream's model catalog instead of the
-  models in the server config, and loads its choice with the catalog's session
-  options, which are empty for Irodori-TTS. The catalog's Irodori-TTS v4.1
-  Small entry has the id `irodori-tts`; when the server config uses the same id
-  (the Windows launcher does), the WebUI reloads that model with those empty
-  options, and API requests for `irodori-tts` then use them too. Put options
-  that must survive this, such as the memory options of
+- **WebUI model management: session options.** With `ui_management` on,
+  the WebUI also lists upstream's model catalog, and loads its choice with the
+  catalog's session options, which are empty for Irodori-TTS. The catalog's
+  Irodori-TTS v4.1 Small entry has the id `irodori-tts`; when the server
+  config uses the same id (the Windows launcher does), the WebUI reloads that
+  model with those empty options, and API requests for `irodori-tts` then use
+  them too. Put options that must survive this, such as the memory options of
   [irodori_codec_chunked_decode.md](irodori_codec_chunked_decode.md), in
-  `session_option_defaults` (see [Port to v0.9.0](#port-to-v090)) rather than
-  in the model's `session_options`. In this mode the WebUI does not offer the
-  server's voice list (v0.9.0 showed only upstream's demo voices there; from
-  v0.9.2 on there is no list, only reference audio files and voices saved in
-  the browser), so voice-library embeddings cannot be picked in the WebUI (the
-  API still accepts their names; with `ui_management` off they appear under
-  "Configured voices").
+  `default_session_options` (`session_option_defaults` up to v0.9.2) rather
+  than in the model's `session_options`. Up to v0.9.2 the WebUI also did not
+  offer the server's voice list in this mode (v0.9.0 showed only upstream's
+  demo voices; v0.9.2 only reference audio files and voices saved in the
+  browser); since upstream #941 it lists the voice library, embeddings
+  included, once a model is selected.
 - **One reference only.** Irodori-TTS v4 in Python accepts several reference
   clips (`--ref-wavs`) and concatenates their codec latents. audio.cpp takes a
   single reference clip or a single embedding.
