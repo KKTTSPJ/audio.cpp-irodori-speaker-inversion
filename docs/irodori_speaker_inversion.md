@@ -24,7 +24,21 @@ requests from this fork were merged after v0.9.1 and released in **v0.9.2**
   like Python by default, and the request option `reference_duration_sec`
   (`max_ref_sec` before v0.9.2, still accepted) sets another length.
 
-This branch builds on those and keeps what upstream does not have: the
+Six more pull requests from this fork were merged after v0.9.2 and are part
+of this branch's base: the WebUI lists the server's voices with model
+management on and previews the voice library
+([#941](https://github.com/0xShug0/audio.cpp/pull/941),
+[#943](https://github.com/0xShug0/audio.cpp/pull/943)), the server config
+`default_session_options`
+([#944](https://github.com/0xShug0/audio.cpp/pull/944)), request options in
+`voice_presets`, which can name an embedding
+([#942](https://github.com/0xShug0/audio.cpp/pull/942)), and configured models
+that keep their settings and behave the same in the WebUI with and without
+model management ([#971](https://github.com/0xShug0/audio.cpp/pull/971),
+[#972](https://github.com/0xShug0/audio.cpp/pull/972)).
+
+Speaker Inversion itself is now part of upstream. This branch builds on it and
+keeps what upstream does not have, for people who use Irodori-TTS: the
 Irodori-TTS-Server compatible request fields and embeddings in the server's
 voice library, output post-processing (`normalize_db` / `volume`), the old
 session option of the reference length cap (`irodori_tts.max_ref_seconds`,
@@ -36,9 +50,9 @@ these can read the changes or check out and build this branch.
 
 | | |
 |---|---|
-| Based on | audio.cpp **`v0.9.2`**, the first release with the merged pull requests above. See [Port to v0.9.2](#port-to-v092). |
-| Working branch | The working branch was rebuilt on upstream `main` after v0.9.2 (`03d1b46`), with three more of this fork's pull requests merged; it is not published. See [Port to upstream main (after v0.9.2)](#port-to-upstream-main-after-v092). |
-| Older bases | The working branch on upstream `main` between v0.9.1 and v0.9.2 was not published; see [Port to upstream main](#port-to-upstream-main-after-v091). Branch `irodori-speaker-inversion/v0.9.0` (tag `irodori-speaker-inversion-v0.9.0`) carries the same feature on `v0.9.0`, with this fork's own implementation of the parts that are now upstream. Branch `irodori-speaker-inversion/v0.8.2` (tags `irodori-speaker-inversion-v0.8.2` to `-r4`) carries the same feature on `v0.8.2`, and `irodori-speaker-inversion/v0.5.1` on `release-0.5.1`. They stay as they are; this branch is a port, not a replacement of their history. See [Port to v0.9.1](#port-to-v091) (not published) and [Port to v0.9.0](#port-to-v090). |
+| Based on | upstream `main` at **`ccdbe76`**: upstream's release tag **`v0.9.2-drama3-base-small`** (`5074956`) plus two later commits, [#974](https://github.com/0xShug0/audio.cpp/pull/974) and [#980](https://github.com/0xShug0/audio.cpp/pull/980) (the reworked Studio of the WebUI), taken ahead of upstream's next release. Published as **v0.9.2-r2** (branch `irodori-speaker-inversion/v0.9.2-r2`). See [v0.9.2-r2](#v092-r2). |
+| Previous release | Branch `irodori-speaker-inversion/v0.9.2` (tag `irodori-speaker-inversion-v0.9.2`) on upstream `v0.9.2`. It stays as it is. See [Port to v0.9.2](#port-to-v092). |
+| Older bases | The working branches on upstream `main` between v0.9.1 and v0.9.2, and after v0.9.2 before r2, were not published; see [Port to upstream main](#port-to-upstream-main-after-v091). Branch `irodori-speaker-inversion/v0.9.0` (tag `irodori-speaker-inversion-v0.9.0`) carries the same feature on `v0.9.0`, with this fork's own implementation of the parts that are now upstream. Branch `irodori-speaker-inversion/v0.8.2` (tags `irodori-speaker-inversion-v0.8.2` to `-r4`) carries the same feature on `v0.8.2`, and `irodori-speaker-inversion/v0.5.1` on `release-0.5.1`. They stay as they are; this branch is a port, not a replacement of their history. See [Port to v0.9.1](#port-to-v091) (not published) and [Port to v0.9.0](#port-to-v090). |
 
 ## What this branch changes
 
@@ -121,6 +135,51 @@ Audio output is identical to r3:
   [packaging/windows/README.md](../packaging/windows/README.md)): scripts that
   download the model, create a server config with the memory options on, and
   start the server with the WebUI. Also published as a release asset of r3 and r4.
+
+### v0.9.2-r2
+
+Rebuilt on upstream `main` at `ccdbe76`. Upstream tagged `5074956` as its
+release `v0.9.2-drama3-base-small`; the two commits after it are included
+ahead of upstream's next release, mainly for
+[#980](https://github.com/0xShug0/audio.cpp/pull/980), which reworks the
+Studio of the WebUI (sections with icons, one voice list for the server's
+voices and the voices saved in the browser, shared with Arena). The version
+string stays 0.9.2 (`0.9.2-r2-irodori-speaker-inversion`), as upstream's tag
+does.
+
+From upstream since v0.9.2, besides the six pull requests from this fork named
+at the top:
+
+- [#894](https://github.com/0xShug0/audio.cpp/pull/894): the `instruct` /
+  `instructions` request fields of the CLI and the server follow one rule.
+  This fork's compatibility fields are read as before.
+- [#973](https://github.com/0xShug0/audio.cpp/pull/973): a model entry can set
+  its own backend `device`; a WebUI reload keeps it.
+- [#954](https://github.com/0xShug0/audio.cpp/pull/954): less memory for the
+  WavLM used by MioCodec and MeanVC2.
+- New models and other changes listed in upstream's release notes. The
+  Irodori-TTS sources are unchanged since v0.9.2.
+
+This fork's changes since the v0.9.2 release:
+
+- **Streaming models:** `normalize_db` / `volume` work on a `"mode":
+  "streaming"` model (the first v0.9.2 build rejected them there); see
+  [Known limitations](#known-limitations) for streamed audio.
+- **Windows launcher:** for v0.9.2-r2 and later it writes the memory options
+  as `default_session_options` and turns WebUI model management on
+  (`"ui_management": true`), since the WebUI now lists the voices in
+  `voices\` in that mode. It tells the builds apart by `--version`: the
+  v0.9.0 and v0.9.2 releases print `<x.y.z>-irodori-speaker-inversion`, and
+  any other suffix on 0.9.2 counts as later. Its model list keeps MioCodec
+  25Hz 44.1kHz v2 (No. 10), added to the v0.9.2 launcher zip after that
+  release.
+- **WebUI:** Arena labels the server's voice list "Configured voices", as
+  Studio does, unless it holds only the embedded demo voices. Arena asks for
+  the voices without a model, so it lists the reference WAVs of the voice
+  library but not the embeddings, which only Irodori-TTS can use; select an
+  embedding in Studio.
+- `session_option_defaults` keeps working as the old name of
+  `default_session_options`.
 
 ### Port to upstream main (after v0.9.2)
 
@@ -603,6 +662,19 @@ answered a request: the Irodori-TTS models generated speech (the same output
 with and without `soxr.dll`), the three ASR models transcribed a generated
 Japanese sentence correctly, and the VC models converted it.
 
+**v0.9.2-r2.** Built the same way, the output is bit-identical to v0.9.2
+for the same CUDA requests (default options, the four memory options, and the
+production-style config), and the WebUI reload check gives the configured
+output with either key and in both server runtimes. The compatibility fields,
+post-processing and streaming give the same outputs as on upstream `main`
+after v0.9.2 (the streamed audio is identical; only the reported timing
+differs). The Windows launcher passes its end-to-end check and writes
+`default_session_options` and `"ui_management": true` for this build, and
+`session_option_defaults` and `false` for the v0.9.2 release's exe. In the
+WebUI, Studio lists a reference WAV and an embedding of the voice library
+under "Configured voices", previews the WAV and generates with the embedding,
+and Arena labels its list by content.
+
 **v3 embeddings on v4.** An embedding trained against the 500M v3 checkpoint
 loads and runs on v4 Small: both use `speaker_dim = 768`. In a listening test
 on the v0.5.1 branch with the same text, seed and embedding, v3 and v4 sounded
@@ -625,7 +697,9 @@ model it was trained on, so retraining on v4 may still improve results.
   offer the server's voice list in this mode (v0.9.0 showed only upstream's
   demo voices; v0.9.2 only reference audio files and voices saved in the
   browser); since upstream #941 it lists the voice library, embeddings
-  included, once a model is selected.
+  included, once a model is selected. Since upstream #971 such a reload keeps
+  the model's other settings from the config (`voice_presets`,
+  `default_request_options` and so on).
 - **One reference only.** Irodori-TTS v4 in Python accepts several reference
   clips (`--ref-wavs`) and concatenates their codec latents. audio.cpp takes a
   single reference clip or a single embedding.
@@ -716,5 +790,5 @@ New files added by this branch: `include/cuda_msvc_compat.h`, `include/engine/fr
 - [audio.cpp](https://github.com/0xShug0/audio.cpp) by ShugoAI LLC, the base of this fork.
 - [Irodori-TTS](https://github.com/Aratako/Irodori-TTS) by Aratako, the model family and Speaker Inversion training.
 - Development was AI-assisted: the initial implementation with Antigravity (Gemini), and the later
-  fixes, tests, review, curation, the ports to v0.8.2, v0.9.0, v0.9.1, upstream main and v0.9.2, and the upstream pull requests with Claude. Claude's involvement is also
+  fixes, tests, review, curation, the ports to v0.8.2, v0.9.0, v0.9.1, upstream main, v0.9.2 and v0.9.2-r2, and the upstream pull requests with Claude. Claude's involvement is also
   recorded in each commit's `Co-Authored-By` trailers.
