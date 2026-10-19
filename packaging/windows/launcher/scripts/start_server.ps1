@@ -58,15 +58,22 @@ if ($versionText -notmatch 'backends:\s*([^\r\n]+)') {
 }
 $backend = if ($Matches[1] -match 'cuda') { 'cuda' } else { 'cpu' }
 # Fork builds from v0.9.0 on print a "model manager:" line and take session options that also reach
-# models the WebUI loads: "default_session_options" (upstream's name) after v0.9.2, and the fork's
-# earlier name "session_option_defaults" up to v0.9.2 (later builds still read it). With
-# "model manager: yes" the WebUI can download and switch models ("ui_management"). The launcher turns
-# it on for builds after v0.9.2 only: up to v0.9.2 the WebUI then did not list the voices in voices\.
+# models the WebUI loads: "default_session_options" (upstream's name) from v0.9.2-r2 on, and the fork's
+# earlier name "session_option_defaults" in the v0.9.0 and v0.9.2 releases (later builds still read it).
+# With "model manager: yes" the WebUI can download and switch models ("ui_management"). The launcher
+# turns it on from v0.9.2-r2 on only: before, the WebUI then did not list the voices in voices\.
+# v0.9.2-r2 is built on upstream's v0.9.2-drama3-base-small, which still reports 0.9.2, so the number
+# alone cannot tell it from the v0.9.2 release: the fork releases v0.9.0 and v0.9.2 print exactly
+# "<x.y.z>-irodori-speaker-inversion", and any other suffix on 0.9.2 ("0.9.2-r2-irodori-speaker-inversion",
+# development builds "0.9.2-main-irodori-speaker-inversion") is later code.
 $isV090Fork = $versionText -match '(?m)^model manager:'
 $hasModelManager = $versionText -match '(?m)^model manager:\s*yes'
 $isAfterV092 = $false
-if ($versionText -match '^audio\.cpp (\d+)\.(\d+)\.(\d+)') {
-  $isAfterV092 = [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])" -gt [version]"0.9.2"
+if ($versionText -match '^audio\.cpp (\d+)\.(\d+)\.(\d+)(\S*)') {
+  $numericVersion = [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])"
+  $versionSuffix = $Matches[4]
+  $isAfterV092 = ($numericVersion -gt [version]"0.9.2") -or
+    ($numericVersion -eq [version]"0.9.2" -and $versionSuffix -ne "" -and $versionSuffix -ne "-irodori-speaker-inversion")
 }
 $sessionDefaultsKey = if ($isAfterV092) { "default_session_options" } else { "session_option_defaults" }
 

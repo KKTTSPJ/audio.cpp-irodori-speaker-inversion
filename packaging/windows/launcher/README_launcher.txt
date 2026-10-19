@@ -92,7 +92,7 @@ The server listens on 127.0.0.1 only (this PC). It has no authentication: do not
 change "host" to "0.0.0.0" unless the network is trusted.
 
 Memory settings. The config enables the options that bound the peak memory of
-Irodori-TTS, under "default_session_options" (packages after v0.9.2;
+Irodori-TTS, under "default_session_options" (v0.9.2-r2 packages and later;
 "session_option_defaults" in v0.9.0 to v0.9.2, which later packages still
 read; older packages put them under "session_options" of the model):
 
@@ -128,7 +128,7 @@ Model management in the WebUI (optional, v0.9.0 packages and later)
 -------------------------------------------------------------------
 The packages are built with upstream's model manager. start_server.bat writes
   "ui_management": true,
-into server_config.json (packages after v0.9.2; v0.9.0 to v0.9.2 wrote false),
+into server_config.json (v0.9.2-r2 packages and later; v0.9.0 to v0.9.2 wrote false),
 so the WebUI's Models tab can download, switch and delete models (stored in
 models\ next to the exe) besides the models of server_config.json. Models
 loaded from the WebUI also get the memory settings above. Once a model is
@@ -222,7 +222,7 @@ server_config.json
 
 メモリの設定
   Irodori-TTS の使用メモリのピークを抑える 3 つのオプションを有効にしています（上の
-  英語の節の 3 行。v0.9.2 より後のパッケージでは "default_session_options"、v0.9.0〜v0.9.2
+  英語の節の 3 行。v0.9.2-r2 以降のパッケージでは "default_session_options"、v0.9.0〜v0.9.2
   では "session_option_defaults"（後のパッケージもこの名前を読みます）、それより前は
   モデルの "session_options" の中）。短文でも長文でも GPU のメモリは約 2 GB にとどまります
   （Irodori-TTS v4、RTX 5060 Ti。無効だと 26 秒の出力で 6.2 GB）。出力の違いはごくわずか
@@ -237,7 +237,7 @@ server_config.json
 
 WebUI のモデル管理（任意、v0.9.0 以降のパッケージ）:
   バイナリは上流のモデルマネージャ付きでビルドしています。start_server.bat は
-  server_config.json に "ui_management": true, と書きます（v0.9.2 より後のパッケージ。
+  server_config.json に "ui_management": true, と書きます（v0.9.2-r2 以降のパッケージ。
   v0.9.0〜v0.9.2 は false）。WebUI の「モデル」タブから、server_config.json のモデルに
   加えて、モデルのダウンロード・切り替え・削除ができます（保存先は exe と同じフォルダの
   models\）。WebUI から読み込んだモデルにもメモリの設定が効きます。モデルを選ぶと、
