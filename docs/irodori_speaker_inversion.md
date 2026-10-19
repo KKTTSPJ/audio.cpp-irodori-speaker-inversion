@@ -702,6 +702,9 @@ one-line notice at the top. The modified files are:
 - `src/models/irodori_tts/session.cpp` (the `irodori_tts.max_ref_seconds` compatibility option)
 - `model_specs/irodori_tts.json` (JSON has no comments, so this file carries
   no notice; it declares the `irodori_tts.max_ref_seconds` session option)
+- `webui/native/src/routes/Arena.svelte` (Arena labels the server's voice list
+  "Configured voices" unless it holds only the embedded demo voices, as Studio
+  does) and the rebuilt `webui/native/dist/index.html` (generated, no notice)
 
 New files added by this branch: `include/cuda_msvc_compat.h`, `include/engine/framework/runtime/post_process.h`,
 `src/framework/runtime/post_process.cpp`,

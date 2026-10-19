@@ -1,3 +1,4 @@
+<!-- Modified by KKTTSPJ, 2026: the voice list is labelled by content, as in Studio. See docs/irodori_speaker_inversion.md. -->
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { browserDecodeToWav } from '$lib/audio';
@@ -116,6 +117,10 @@
   }
   $: builtinVoices = [...serverVoices]
     .sort((left, right) => left.localeCompare(right, 'en', { sensitivity: 'base', numeric: true }));
+  // Same rule as Studio's voice list: the server's own voices (voice_dir) are
+  // configured voices; only the embedded demo recordings are demo voices.
+  $: builtinVoicesAreDemos = server?.ui_management !== false &&
+    builtinVoices.every((voice) => voice in demoVoiceSources);
   $: if (arenaVoiceMode === 'builtin' && !builtinVoices.includes(arenaBuiltinVoice)) {
     arenaBuiltinVoice = builtinVoices[0] || '';
   }
@@ -690,7 +695,7 @@
           <VoicePicker id="arena-voice-mode"
             value={arenaSavedVoiceId ? `saved:${arenaSavedVoiceId}` : arenaVoiceMode === 'builtin' ? `preset:${arenaBuiltinVoice}` : arenaVoiceMode === 'reference' ? 'reference' : ''}
             presets={arenaMode === 'tts' ? builtinVoices : []} {savedVoices}
-            presetLabel={tr('arena.voice.builtin')} emptyLabel={tr('arena.voice.modelDefault')}
+            presetLabel={builtinVoicesAreDemos ? tr('arena.voice.builtin') : tr('voice.configured')} emptyLabel={tr('arena.voice.modelDefault')}
             allowEmpty={arenaMode === 'tts'} referenceOption {tr} disabled={running} onselect={chooseArenaVoice} />
         </div>
         <div>
