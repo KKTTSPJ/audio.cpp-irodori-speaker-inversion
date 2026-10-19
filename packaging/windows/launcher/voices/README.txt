@@ -13,8 +13,8 @@ If both name.speaker.safetensors and name.wav exist, the embedding is used.
 The WebUI lists both under "Configured voices" (v0.8.2-r4 and later; r3 lists
 only the .wav files). In v0.9.0 to v0.9.2 packages, WebUI model management
 ("ui_management": true in server_config.json) hides them from the WebUI; the
-names here still work through the API and test_tts.bat. Later packages list
-them with model management on as well, once a model is selected.
+names here still work through the API and test_tts.bat. v0.9.2-r2 and later
+packages list them with model management on as well, once a model is selected.
 Note: if no file matches the name (for example a typo), the server does not
 report an error and generates without a reference. test_tts.bat checks the name.
 
@@ -26,7 +26,7 @@ report an error and generates without a reference. test_tts.bat checks the name.
 には両方が表示されます（v0.8.2-r4 以降。r3 では .wav だけ）。v0.9.0〜v0.9.2 の
 パッケージでは、WebUI のモデル管理を有効にすると（server_config.json の
 "ui_management": true）一覧には表示されなくなりますが、ここの名前は API と test_tts.bat
-でそのまま使えます。それより後のパッケージでは、モデル管理が有効でもモデルを選べば
+でそのまま使えます。v0.9.2-r2 以降のパッケージでは、モデル管理が有効でもモデルを選べば
 表示されます。
 注意: 名前に合うファイルが無い場合（打ち間違いなど）、サーバーはエラーにせず参照なしで
 生成します。test_tts.bat は名前を事前に確認します。
