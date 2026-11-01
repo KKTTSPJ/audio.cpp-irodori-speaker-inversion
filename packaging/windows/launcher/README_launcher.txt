@@ -42,21 +42,29 @@ requests and the name shown in the WebUI.
 
   Text to speech (Irodori-TTS; WebUI: Text to speech tab)
      1  Irodori-TTS v4.1 Small Q8_0 (default)   id irodori-tts
-     2  Irodori-TTS v4.1 Anime Q8_0             id irodori-tts-anime (WebUI name: "Irodori-TTS")
-     3  Irodori-TTS 500M v3 Q8_0                id irodori-tts-v3-500m
-     4  Irodori-TTS 600M v3 VoiceDesign Q8_0    id irodori-tts-v3-vdesign (WebUI: Voice design tab)
+     2  Irodori-TTS v4.1 Small MeanFlow Q8_0    id irodori-tts-mf
+     3  Irodori-TTS v4.1 Anime Q8_0             id irodori-tts-anime
+     4  Irodori-TTS 500M v3 Q8_0                id irodori-tts-v3-500m
+     5  Irodori-TTS 600M v3 VoiceDesign Q8_0    id irodori-tts-v3-vdesign (WebUI: Voice design tab)
   Speech recognition (WebUI: ASR / Transcription tab)
-     5  Qwen3-ASR 0.6B Q8_0                     id qwen3-asr
-     6  Qwen3-ASR 1.7B Q8_0                     id qwen3-asr-1.7b
-     7  CrisperWhisper 2.0 Large Q8_0           id crisperwhisper
+     6  Qwen3-ASR 0.6B Q8_0                     id qwen3-asr
+     7  Qwen3-ASR 1.7B Q8_0                     id qwen3-asr-1.7b
+     8  CrisperWhisper 2.0 Large Q8_0           id crisperwhisper
   Voice conversion (WebUI: Voice conversion tab)
-     8  MeanVC2 F32                             id meanvc2
-     9  Seed-VC Q8_0                            id seed-vc
-    10  MioCodec 25Hz 44.1kHz v2 Q8_0           id miocodec
+     9  MeanVC2 F32                             id meanvc2
+    10  Seed-VC Q8_0                            id seed-vc
+    11  MioCodec 25Hz 44.1kHz v2 Q8_0           id miocodec
 
-The WebUI names models after upstream's catalog. Irodori-TTS v4.1 Anime is kept
-in models\Irodori-TTS-v4.1-Anime-GGUF so that it does not show under the name of
-v4.1 Small; it appears as plain "Irodori-TTS".
+Irodori-TTS v4.1 Small MeanFlow is distilled from v4.1 Small to generate in
+4 sampling steps (its default) instead of 40, so it is faster. The same voices
+work with it. "num_inference_steps" in a request applies to it too: leave it
+out, or a value meant for the other models (such as 40 or 48) sets its steps.
+
+The WebUI names models after upstream's catalog. Irodori-TTS v4.1 MeanFlow and
+Anime are kept in folders of their own (models\Irodori-TTS-v4.1-Small-MF-GGUF,
+models\Irodori-TTS-v4.1-Anime-GGUF) so that they do not show under the name of
+v4.1 Small; the WebUI shows them as "Irodori-TTS (irodori-tts-mf)" and
+"Irodori-TTS (irodori-tts-anime)".
 
 Each model keeps the license of its original release; download_model.bat shows
 it before downloading. Note especially:
@@ -73,8 +81,9 @@ older package it accepts 16 kHz audio only.
 Voice conversion returns audio at the model's own sample rate: MioCodec
 44.1 kHz, Seed-VC 22.05 kHz, MeanVC2 16 kHz.
 
-The files are stored where upstream's model manager stores the same packages,
-so the WebUI's model management (below) sees them as installed.
+Apart from those two, the files are stored where upstream's model manager
+stores the same packages, so the WebUI's model management (below) sees them as
+installed.
 
 server_config.json
 ------------------
@@ -135,10 +144,11 @@ loaded from the WebUI also get the memory settings above. Once a model is
 selected, the WebUI lists the voices in voices\ (reference WAVs and Speaker
 Inversion embeddings) under "Configured voices"; the WAVs can be previewed.
 Notes:
-  - Irodori-TTS v4.1 Anime and F16 install into the same
+  - Irodori-TTS v4.1 MeanFlow, Anime and F16 install into the same
     models\Irodori-TTS-v4-Small-GGUF folder. That is fine: server_config.json
-    points to each file itself. (download_model.bat keeps Anime in a folder of
-    its own instead, so the model manager does not see it as installed.)
+    points to each file itself. (download_model.bat keeps MeanFlow and Anime in
+    folders of their own instead, so the model manager does not see them as
+    installed.)
   - To turn model management off, change it to false and restart the server.
     The WebUI then lists only the models of server_config.json.
   - With v0.9.0 to v0.9.2 packages, model management hides the voices in
@@ -189,13 +199,18 @@ audiocpp_server.exe を、設定ファイルを手で書かずに Irodori-TTS �
 モデル
   download_model.bat で取得できるモデルと id（API の "model" に指定する名前、WebUI の
   表示名）は上の英語の節の「Models」のとおりです。
-    1〜4   音声合成（Irodori-TTS v4.1 Small Q8_0（既定）・Anime、500M v3、
-           600M v3 VoiceDesign（WebUI の「声のデザイン」タブ））
-    5〜7   音声認識（Qwen3-ASR 0.6B / 1.7B、CrisperWhisper 2.0）
-    8〜10  声質変換（MeanVC2、Seed-VC、MioCodec）
-  WebUI はモデルの表示名を上流のカタログから決めます。v4.1 Anime は v4.1 Small と同じ名前で
-  表示されないよう models\Irodori-TTS-v4.1-Anime-GGUF に置くので、WebUI では単に
-  「Irodori-TTS」と表示されます。
+    1〜5   音声合成（Irodori-TTS v4.1 Small Q8_0（既定）・Small MeanFlow・Anime、
+           500M v3、600M v3 VoiceDesign（WebUI の「声のデザイン」タブ））
+    6〜8   音声認識（Qwen3-ASR 0.6B / 1.7B、CrisperWhisper 2.0）
+    9〜11  声質変換（MeanVC2、Seed-VC、MioCodec）
+  Irodori-TTS v4.1 Small MeanFlow は v4.1 Small を蒸留したモデルで、40 ステップではなく
+  4 ステップ（既定）で生成するので速くなります。声はそのまま使えます。リクエストの
+  "num_inference_steps" はこのモデルにも効くので、送らないでください。他のモデル向けの値
+  （40 や 48 など）を送ると、そのステップ数で生成します。
+  WebUI はモデルの表示名を上流のカタログから決めます。v4.1 の MeanFlow と Anime は v4.1 Small
+  と同じ名前で表示されないよう専用のフォルダ（models\Irodori-TTS-v4.1-Small-MF-GGUF、
+  models\Irodori-TTS-v4.1-Anime-GGUF）に置くので、WebUI では「Irodori-TTS (irodori-tts-mf)」
+  「Irodori-TTS (irodori-tts-anime)」と表示されます。
   各モデルは元の公開時のライセンスに従います（取得前に表示します）。特に:
     - Irodori-TTS: MIT（倫理上の制限あり。本人の同意なく声を複製しない、ディープ
       フェイクを作らない）。声質変換にも同じことが当てはまります
@@ -207,7 +222,8 @@ audiocpp_server.exe を、設定ファイルを手で書かずに Irodori-TTS �
   16 kHz の音声だけを受け付けます。
   声質変換の出力の標本化周波数はモデルごとに決まっています（MioCodec 44.1 kHz、
   Seed-VC 22.05 kHz、MeanVC2 16 kHz）。
-  保存場所は上流のモデル管理と同じなので、WebUI のモデル管理からも取得済みに見えます。
+  この 2 つ以外の保存場所は上流のモデル管理と同じなので、WebUI のモデル管理からも取得済みに
+  見えます。
 
 server_config.json
   初回に作り、以後は編集した内容を保ちます。ただし、作った後に取得したモデルは、
@@ -243,9 +259,10 @@ WebUI のモデル管理（任意、v0.9.0 以降のパッケージ）:
   models\）。WebUI から読み込んだモデルにもメモリの設定が効きます。モデルを選ぶと、
   声の一覧（Configured voices）に voices\ の参照音声と Speaker Inversion の埋め込みが
   出ます（参照音声は試聴もできます）。
-  - Irodori-TTS v4.1 の Anime と F16 は同じ models\Irodori-TTS-v4-Small-GGUF に入りますが、
-    server_config.json はそれぞれのファイルを直接指しているので問題ありません
-    （download_model.bat は Anime を専用のフォルダに置くので、モデル管理からは未取得に見えます）
+  - Irodori-TTS v4.1 の MeanFlow・Anime・F16 は同じ models\Irodori-TTS-v4-Small-GGUF に
+    入りますが、server_config.json はそれぞれのファイルを直接指しているので問題ありません
+    （download_model.bat は MeanFlow と Anime を専用のフォルダに置くので、モデル管理からは
+    未取得に見えます）
   - モデル管理を止めるには false に変えてサーバーを再起動してください。モデルの一覧には
     server_config.json のモデルだけが出ます。
   - v0.9.0〜v0.9.2 のパッケージでは、モデル管理を有効にすると WebUI に voices\ の声が
