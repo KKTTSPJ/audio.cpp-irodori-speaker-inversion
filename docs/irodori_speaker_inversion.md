@@ -50,8 +50,8 @@ these can read the changes or check out and build this branch.
 
 | | |
 |---|---|
-| Based on | upstream `main` at **`ccdbe76`**: upstream's release tag **`v0.9.2-drama3-base-small`** (`5074956`) plus two later commits, [#974](https://github.com/0xShug0/audio.cpp/pull/974) and [#980](https://github.com/0xShug0/audio.cpp/pull/980) (the reworked Studio of the WebUI), taken ahead of upstream's next release. Published as **v0.9.2-r2** (branch `irodori-speaker-inversion/v0.9.2-r2`). See [v0.9.2-r2](#v092-r2). |
-| Previous release | Branch `irodori-speaker-inversion/v0.9.2` (tag `irodori-speaker-inversion-v0.9.2`) on upstream `v0.9.2`. It stays as it is. See [Port to v0.9.2](#port-to-v092). |
+| Based on | audio.cpp **`v0.9.3`** (`41c1f8f`, 2026-10-26). Published as **v0.9.3** (branch `irodori-speaker-inversion/v0.9.3`). See [Port to v0.9.3](#port-to-v093). |
+| Previous releases | Branch `irodori-speaker-inversion/v0.9.2-r2` (tag `irodori-speaker-inversion-v0.9.2-r2`) on upstream `main` at `ccdbe76`, see [v0.9.2-r2](#v092-r2); branch `irodori-speaker-inversion/v0.9.2` (tag `irodori-speaker-inversion-v0.9.2`) on upstream `v0.9.2`, see [Port to v0.9.2](#port-to-v092). They stay as they are. |
 | Older bases | The working branches on upstream `main` between v0.9.1 and v0.9.2, and after v0.9.2 before r2, were not published; see [Port to upstream main](#port-to-upstream-main-after-v091). Branch `irodori-speaker-inversion/v0.9.0` (tag `irodori-speaker-inversion-v0.9.0`) carries the same feature on `v0.9.0`, with this fork's own implementation of the parts that are now upstream. Branch `irodori-speaker-inversion/v0.8.2` (tags `irodori-speaker-inversion-v0.8.2` to `-r4`) carries the same feature on `v0.8.2`, and `irodori-speaker-inversion/v0.5.1` on `release-0.5.1`. They stay as they are; this branch is a port, not a replacement of their history. See [Port to v0.9.1](#port-to-v091) (not published) and [Port to v0.9.0](#port-to-v090). |
 
 ## What this branch changes
@@ -135,6 +135,45 @@ Audio output is identical to r3:
   [packaging/windows/README.md](../packaging/windows/README.md)): scripts that
   download the model, create a server config with the memory options on, and
   start the server with the WebUI. Also published as a release asset of r3 and r4.
+
+### Port to v0.9.3
+
+Rebuilt on upstream `v0.9.3` with the commits of v0.9.2-r2. Two of upstream's
+changes alter Irodori-TTS itself, for the first time since v0.9.2:
+
+- [#1027](https://github.com/0xShug0/audio.cpp/pull/1027): the text is split
+  into chunks of **100 characters** by default (before: the model's text
+  window, 256). Each chunk is generated within 30 seconds, and a longer chunk
+  came out garbled in its second half. A text longer than 100 characters therefore
+  sounds different from earlier releases; set the request option
+  `text_chunk_size` to `256` for the earlier split.
+- [#1083](https://github.com/0xShug0/audio.cpp/pull/1083): MeanFlow checkpoints
+  (`irodori-tts-v4.1-small-mf-*.gguf`), which default to 4 steps. The output of
+  the existing checkpoints does not change.
+
+Other upstream changes that touch this fork:
+
+- [#1086](https://github.com/0xShug0/audio.cpp/pull/1086): an empty or `null`
+  `voice` counts as no voice. This fork's voice-library lookup follows it; a
+  name, or an object with an `id`, resolves as before (embedding first, then
+  WAV).
+- [#1099](https://github.com/0xShug0/audio.cpp/pull/1099): an **Apps** tab in
+  the WebUI (an early release) with a Text to speech workspace, and model
+  presets saved in the browser. See
+  [Known limitations](#known-limitations) for its voices.
+- [#1097](https://github.com/0xShug0/audio.cpp/pull/1097): `GET /health`
+  reports the version and git commit.
+
+This fork's commits are carried over unchanged, apart from the merge with
+#1086 and a rebuilt `webui/native/dist/index.html`. The version string is
+`0.9.3-irodori-speaker-inversion`; the Windows launcher treats it as newer
+than v0.9.2 (it writes `default_session_options` and turns model management
+on).
+
+The Irodori-TTS GGUF files on Hugging Face were refreshed on 2026-10-19
+(embedded model specs). For a file downloaded before that,
+`download_model.bat` reports that it differs from the current one and leaves
+it alone; the older file keeps working.
 
 ### v0.9.2-r2
 
@@ -675,6 +714,20 @@ WebUI, Studio lists a reference WAV and an embedding of the voice library
 under "Configured voices", previews the WAV and generates with the embedding,
 and Arena labels its list by content.
 
+**v0.9.3.** Built the same way, short texts give output bit-identical to
+v0.9.2-r2 (CUDA with the default and the four memory options, and the CPU
+backend). A 156-character text gives new output, as #1027 splits it into chunks
+of up to 100 characters; with `text_chunk_size: 256` it is bit-identical to v0.9.2-r2, which
+also shows that #1083 left the existing sampling path unchanged. The
+production-style config, the WebUI reload check (either key, both runtimes),
+the compatibility fields, post-processing and streaming give the same outputs
+as v0.9.2-r2. A `voice` given as a name or as `{"id": ...}` resolves to the
+voice-library embedding, and an empty or `null` one gives the output of a
+request without `voice`. The Windows launcher passes its end-to-end check, and
+in the WebUI Studio lists the voice library and generates with an embedding as
+before. `server_config_test`, `server_voice_preset_test`,
+`audio_post_process_test` and `server_parallel_lifecycle_test` pass.
+
 **v3 embeddings on v4.** An embedding trained against the 500M v3 checkpoint
 loads and runs on v4 Small: both use `speaker_dim = 768`. In a listening test
 on the v0.5.1 branch with the same text, seed and embedding, v3 and v4 sounded
@@ -700,6 +753,11 @@ model it was trained on, so retraining on v4 may still improve results.
   included, once a model is selected. Since upstream #971 such a reload keeps
   the model's other settings from the config (`voice_presets`,
   `default_request_options` and so on).
+- **WebUI Apps tab.** The speakers of upstream's Text to speech app (v0.9.3,
+  an early release) choose from the model's built-in voices or an uploaded
+  recording. The app does not offer the server's voices, so the reference WAVs
+  and embeddings of the voice library and `voice_presets` cannot be picked
+  there; use them in Studio or through the API.
 - **One reference only.** Irodori-TTS v4 in Python accepts several reference
   clips (`--ref-wavs`) and concatenates their codec latents. audio.cpp takes a
   single reference clip or a single embedding.
@@ -790,5 +848,5 @@ New files added by this branch: `include/cuda_msvc_compat.h`, `include/engine/fr
 - [audio.cpp](https://github.com/0xShug0/audio.cpp) by ShugoAI LLC, the base of this fork.
 - [Irodori-TTS](https://github.com/Aratako/Irodori-TTS) by Aratako, the model family and Speaker Inversion training.
 - Development was AI-assisted: the initial implementation with Antigravity (Gemini), and the later
-  fixes, tests, review, curation, the ports to v0.8.2, v0.9.0, v0.9.1, upstream main, v0.9.2 and v0.9.2-r2, and the upstream pull requests with Claude. Claude's involvement is also
+  fixes, tests, review, curation, the ports to v0.8.2, v0.9.0, v0.9.1, upstream main, v0.9.2, v0.9.2-r2 and v0.9.3, and the upstream pull requests with Claude. Claude's involvement is also
   recorded in each commit's `Co-Authored-By` trailers.
