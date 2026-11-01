@@ -8,7 +8,7 @@
 # The WebUI names a configured model after the catalog entry its family, task and path match, so
 # a second variant in the same folder (v4.1 Small F16 / Anime next to Q8_0, MeanVC2 Q4_K next to
 # F32) would show under the same name. The list therefore leaves out F16 and Q4_K, and puts Anime
-# into a folder of its own, where it matches no entry and shows as plain "Irodori-TTS".
+# and MeanFlow into folders of their own, where they match no entry.
 
 function New-LauncherModel([string]$Key, [string]$Title, [string]$Group, [double]$SizeGB, [string]$Id,
                            [string]$Family, [string]$Task, [string]$Repo, [string]$Revision,
@@ -37,6 +37,10 @@ $LauncherModels = @(
     "irodori-tts" "irodori_tts" "tts" $ggufRepo "main" `
     "Irodori-TTS-v4-Small-GGUF/irodori-tts-v4-small-q8_0.gguf" "Irodori-TTS-v4-Small-GGUF\irodori-tts-v4-small-q8_0.gguf" `
     "MIT, ethical restrictions" $irodoriNotice $false $true),
+  (New-LauncherModel "irodori-v4.1-small-mf-q8" "Irodori-TTS v4.1 Small MeanFlow, GGUF Q8_0" "Text to speech (Irodori-TTS)" 1.27 `
+    "irodori-tts-mf" "irodori_tts" "tts" $ggufRepo "main" `
+    "Irodori-TTS-v4-Small-GGUF/irodori-tts-v4.1-small-mf-q8_0.gguf" "Irodori-TTS-v4.1-Small-MF-GGUF\irodori-tts-v4.1-small-mf-q8_0.gguf" `
+    "MIT, ethical restrictions" ($irodoriNotice[0..3] + "  Details: https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small-MF")),
   (New-LauncherModel "irodori-v4.1-anime-q8" "Irodori-TTS v4.1 Anime, GGUF Q8_0" "Text to speech (Irodori-TTS)" 1.04 `
     "irodori-tts-anime" "irodori_tts" "tts" $ggufRepo "main" `
     "Irodori-TTS-v4-Small-GGUF/irodori-tts-v4.1-anime-q8_0.gguf" "Irodori-TTS-v4.1-Anime-GGUF\irodori-tts-v4.1-anime-q8_0.gguf" `
