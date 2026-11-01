@@ -170,10 +170,21 @@ This fork's commits are carried over unchanged, apart from the merge with
 than v0.9.2 (it writes `default_session_options` and turns model management
 on).
 
-The Irodori-TTS GGUF files on Hugging Face were refreshed on 2026-10-19
-(embedded model specs). For a file downloaded before that,
-`download_model.bat` reports that it differs from the current one and leaves
-it alone; the older file keeps working.
+The Windows launcher adds **Irodori-TTS v4.1 Small MeanFlow Q8_0** to its list
+(number 2, id `irodori-tts-mf`; the numbers after it move up by one). Like
+v4.1 Anime, it is kept in a folder of its own,
+`models\Irodori-TTS-v4.1-Small-MF-GGUF`, so that the WebUI does not show it
+under the name of v4.1 Small. The voices in `voices\` work with it. A
+request's `num_inference_steps` applies to it too, so a client that sends the
+step count meant for the other models (40 or 48) should leave it out for this
+one.
+
+The Irodori-TTS GGUF files on Hugging Face were refreshed on 2026-10-19. Only
+the model description embedded in the files changed; the weights are the
+same, and the v4.1 Small Q8_0 file downloaded before and after gives
+identical output. For a file downloaded before that, `download_model.bat`
+reports that it differs from the current one and leaves it alone; the older
+file keeps working.
 
 ### v0.9.2-r2
 
@@ -780,7 +791,7 @@ model it was trained on, so retraining on v4 may still improve results.
 - **One GGUF per model directory.** A directory is loaded from its GGUF only
   when it holds `model.gguf` or exactly one `*.gguf` (upstream behaviour).
   Upstream's package list (also used by the WebUI's model manager) installs
-  the v4.1 Anime GGUF into the same
+  the v4.1 Anime and MeanFlow GGUFs into the same
   `Irodori-TTS-v4-Small-GGUF` directory as the Small one; keep them in separate
   directories, or pass the `.gguf` file itself as `--model`.
 - **Irodori-TTS v4 limitation (upstream).** With reference conditioning, v4 may
