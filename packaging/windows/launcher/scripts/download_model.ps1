@@ -11,6 +11,7 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "models.ps1")
+. (Join-Path $PSScriptRoot "huggingface.ps1")
 
 function Fail([string]$message) {
   Write-Host ""
@@ -33,6 +34,7 @@ function Show-ModelList {
   }
   Write-Host ""
   Write-Host "  * default (what start_server.bat uses for test_tts.bat and the API examples)"
+  Write-Host "  Irodori-TTS v4 Large has no download; convert_v4_large.bat makes it from the original."
 }
 
 function Resolve-Selection([string[]]$items) {
@@ -56,63 +58,18 @@ function Resolve-Selection([string[]]$items) {
 # Downloads one model; returns $true when the file is in place (new or already up to date).
 function Get-Model($m) {
   $dest = Get-LauncherModelFile $m $root
-  $dir = Split-Path -Parent $dest
-  $part = "$dest.part"
-  $url = "https://huggingface.co/$($m.Repo)/resolve/$($m.Revision)/$($m.RemotePath)"
-  $parent = Split-Path -Parent ($m.RemotePath -replace '/', '\')
-  $treePath = if ($parent) { "/" + ($parent -replace '\\', '/') } else { "" }
   Write-Host ""
   Write-Host "=== $($m.Title)"
-  Write-Host "  from $url"
-  try {
-    $listing = Invoke-RestMethod "https://huggingface.co/api/models/$($m.Repo)/tree/$($m.Revision)$treePath" -TimeoutSec 30
-  } catch {
-    Write-Host "  Could not reach huggingface.co: $($_.Exception.Message)" -ForegroundColor Red
-    return $false
-  }
+  $listing = Get-HfFileList $m.Repo $m.Revision (Split-Path -Parent ($m.RemotePath -replace '/', '\'))
+  if ($null -eq $listing) { return $false }
   $entry = @($listing | Where-Object { $_.path -eq $m.RemotePath })[0]
   if ($null -eq $entry -or $null -eq $entry.lfs) {
     Write-Host "  $($m.RemotePath) was not found in $($m.Repo)." -ForegroundColor Red
     return $false
   }
-  $size = [int64]$entry.size
-  $sha256 = ([string]$entry.lfs.oid).ToLowerInvariant()
-
-  if (Test-Path -LiteralPath $dest) {
-    Write-Host "  Checking the existing $dest ..."
-    if ((Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLowerInvariant() -eq $sha256) {
-      Write-Host "  Already downloaded and up to date."
-      return $true
-    }
-    Write-Host ("  $dest exists but differs from the current file on Hugging Face.`n" +
-                "  Delete or move it, then run download_model.bat again.") -ForegroundColor Red
-    return $false
-  }
-  New-Item -ItemType Directory -Force -Path $dir | Out-Null
-  $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
-  if ($curl) {
-    # -C - resumes an interrupted download from the .part file.
-    & $curl.Source -L --fail --retry 3 --retry-delay 5 -C - -o $part $url
-    if ($LASTEXITCODE -ne 0) {
-      Write-Host "  Download failed (curl exit code $LASTEXITCODE). Run download_model.bat again to resume." -ForegroundColor Red
-      return $false
-    }
-  } else {
-    Write-Host "  Downloading (no progress display)..."
-    Invoke-WebRequest $url -OutFile $part -UseBasicParsing
-  }
-  if ((Get-Item -LiteralPath $part).Length -ne $size) {
-    Write-Host "  The downloaded size does not match ($size bytes expected). Run download_model.bat again to resume." -ForegroundColor Red
-    return $false
-  }
-  Write-Host "  Verifying SHA256 ..."
-  if ((Get-FileHash -LiteralPath $part -Algorithm SHA256).Hash.ToLowerInvariant() -ne $sha256) {
-    Remove-Item -LiteralPath $part
-    Write-Host "  SHA256 mismatch; the partial file was deleted. Run download_model.bat again." -ForegroundColor Red
-    return $false
-  }
-  Move-Item -LiteralPath $part -Destination $dest
-  Write-Host "  Done: $dest"
+  $existed = Test-Path -LiteralPath $dest
+  if (-not (Save-HfFile $m.Repo $m.Revision $entry $dest "download_model.bat")) { return $false }
+  if (-not $existed) { Write-Host "  Done: $dest" }
   return $true
 }
 

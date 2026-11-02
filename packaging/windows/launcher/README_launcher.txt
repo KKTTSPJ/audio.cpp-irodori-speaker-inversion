@@ -29,11 +29,15 @@ Files
 -----
   start_server.bat      start the server (options: -NoBrowser, -Port <n> for the first run)
   download_model.bat    download models (options: -List, -Model 1,6, -Yes, -AcceptLicense)
-  test_tts.bat          test request: test_tts.bat ["text"] [voice] [-Model <id>]
+  convert_v4_large.bat  make Irodori-TTS v4 Large, which has no download (see below;
+                        options: -List, -Type 1  or  -Type q8_0,q4_k, -Yes,
+                        -AcceptLicense, -DeleteSource)
+  test_tts.bat         test request: test_tts.bat ["text"] [voice] [-Model <id>]
   voices\               reference voices (.wav) and Speaker Inversion embeddings
                         (.speaker.safetensors); see voices\README.txt
   scripts\              the PowerShell scripts called by the .bat files
                         (scripts\models.ps1 lists the models)
+  sources\              made by convert_v4_large.bat: the original files it converts
 
 Models
 ------
@@ -66,10 +70,35 @@ models\Irodori-TTS-v4.1-Anime-GGUF) so that they do not show under the name of
 v4.1 Small; the WebUI shows them as "Irodori-TTS (irodori-tts-mf)" and
 "Irodori-TTS (irodori-tts-anime)".
 
+Irodori-TTS v4 Large (convert_v4_large.bat)
+  The largest Irodori-TTS (3.3B parameters, against 0.6B of v4.1 Small) has no
+  GGUF to download: its text and caption encoder is derived from Google's
+  T5Gemma 2, so the Gemma Terms of Use apply to it and to files made from it.
+  convert_v4_large.bat downloads the original checkpoint
+  (huggingface.co/Aratako/Irodori-TTS-v4-Large) and the DACVAE codec
+  (Aratako/Semantic-DACVAE-Japanese-32dim), about 13.6 GB, into sources\,
+  shows the terms (type "agree", or pass -AcceptLicense), and converts them
+  with audiocpp_gguf.exe into one or more of these types:
+     1  Q8_0 (default)  4.24 GB  id irodori-tts-v4-large       models\Irodori-TTS-v4-Large-GGUF
+     2  Q6_K            3.63 GB  id irodori-tts-v4-large-q6_k  models\Irodori-TTS-v4-Large-GGUF-q6_k
+     3  Q5_K            3.30 GB  id irodori-tts-v4-large-q5_k  models\Irodori-TTS-v4-Large-GGUF-q5_k
+     4  Q4_K            2.98 GB  id irodori-tts-v4-large-q4_k  models\Irodori-TTS-v4-Large-GGUF-q4_k
+  It needs a binary package that includes audiocpp_gguf.exe (packages up to
+  v0.9.3 do not, and cannot run v4 Large either), about 20 GB of free disk
+  space and about 4 GB of free memory; each type takes a few minutes (Q4_K:
+  1.5 min on a PC with an NVMe SSD, mostly reading the 13 GB checkpoint). At the end
+  it asks whether to delete sources\ (keep it to make another type later).
+  start_server.bat then adds the model like a downloaded one. With the memory
+  settings below, v4 Large uses about 5 GB of GPU memory with Q8_0 and about
+  4 GB with Q4_K. All four types sounded fine in our listening tests; Q4_K and
+  Q5_K may deliver a voice-design caption a little differently. If you share a
+  converted file, the Gemma Terms of Use apply to that as well.
+
 Each model keeps the license of its original release; download_model.bat shows
 it before downloading. Note especially:
   - Irodori-TTS: MIT with ethical restrictions (no voice cloning without consent,
-    no deepfakes). The same applies to voice conversion.
+    no deepfakes). The same applies to voice conversion. v4 Large: the Gemma
+    Terms of Use and Prohibited Use Policy, and the same ethical restrictions.
   - CrisperWhisper 2.0: the model AND its transcripts are for NON-COMMERCIAL use
     only. download_model.bat asks you to type "agree" (or pass -AcceptLicense).
   - Seed-VC: GPL-3.0. Qwen3-ASR and MeanVC2: Apache-2.0. MioCodec: MIT.
@@ -167,6 +196,7 @@ Troubleshooting
 ---------------
   "a DLL is missing"         extract the cudart zip into the same folder (CUDA build)
   "No model found"           run download_model.bat
+  "audiocpp_gguf.exe was not found"  convert_v4_large.bat needs a newer binary package
   "already running"          a server is already using the port; the browser is opened for it
   "already has a model with id"  an entry in server_config.json uses that id for another
                              file; rename one of them, or add the model yourself
@@ -203,6 +233,7 @@ audiocpp_server.exe を、設定ファイルを手で書かずに Irodori-TTS �
            500M v3、600M v3 VoiceDesign（WebUI の「声のデザイン」タブ））
     6〜8   音声認識（Qwen3-ASR 0.6B / 1.7B、CrisperWhisper 2.0）
     9〜11  声質変換（MeanVC2、Seed-VC、MioCodec）
+  Irodori-TTS v4 Large は取得ではなく convert_v4_large.bat で作ります（下記）。
   Irodori-TTS v4.1 Small MeanFlow は v4.1 Small を蒸留したモデルで、40 ステップではなく
   4 ステップ（既定）で生成するので速くなります。声はそのまま使えます。リクエストの
   "num_inference_steps" はこのモデルにも効くので、送らないでください。他のモデル向けの値
@@ -211,9 +242,28 @@ audiocpp_server.exe を、設定ファイルを手で書かずに Irodori-TTS �
   と同じ名前で表示されないよう専用のフォルダ（models\Irodori-TTS-v4.1-Small-MF-GGUF、
   models\Irodori-TTS-v4.1-Anime-GGUF）に置くので、WebUI では「Irodori-TTS (irodori-tts-mf)」
   「Irodori-TTS (irodori-tts-anime)」と表示されます。
+  Irodori-TTS v4 Large（convert_v4_large.bat）
+    最も大きい Irodori-TTS（33 億パラメーター。v4.1 Small は 6 億）です。テキストと
+    caption のエンコーダーが Google の T5Gemma 2 から派生しているため、モデルとそこから
+    作ったファイルに Gemma の利用規約が適用され、GGUF の配布はありません。
+    convert_v4_large.bat が元のチェックポイント（huggingface.co/Aratako/Irodori-TTS-v4-Large）
+    と DACVAE コーデック（Aratako/Semantic-DACVAE-Japanese-32dim）、約 13.6 GB を sources\ に
+    取得し、規約を表示したうえで（agree と入力、または -AcceptLicense）、audiocpp_gguf.exe で
+    変換します。種類は上の英語の節の 4 つ（1 = Q8_0 が既定。Q6_K・Q5_K・Q4_K は小さく、
+    使用メモリも少ない）から選べます。
+    audiocpp_gguf.exe を含む本体のパッケージが必要です（v0.9.3 までのパッケージには無く、
+    v4 Large を動かすこともできません）。ディスクの空きは約 20 GB、メモリの空きは
+    約 4 GB 必要で、1 種類あたり数分かかります（Q4_K は NVMe の PC で 1.5 分。大半は 13 GB の
+    チェックポイントの読み込み）。最後に sources\ を削除するか尋ねます
+    （別の種類を後で作るなら残してください）。変換したモデルは、取得したモデルと同じように
+    start_server.bat が追加します。下のメモリの設定のもとで、GPU のメモリは Q8_0 で約 5 GB、
+    Q4_K で約 4 GB です。試聴ではどの種類も問題なく、Q4_K と Q5_K は声のデザインの caption の
+    演じ方が少し変わることがあります。変換したファイルを人に渡す場合も Gemma の利用規約が
+    適用されます。
   各モデルは元の公開時のライセンスに従います（取得前に表示します）。特に:
     - Irodori-TTS: MIT（倫理上の制限あり。本人の同意なく声を複製しない、ディープ
-      フェイクを作らない）。声質変換にも同じことが当てはまります
+      フェイクを作らない）。声質変換にも同じことが当てはまります。v4 Large は Gemma の
+      利用規約と禁止される使用のポリシー、および同じ倫理上の制限
     - CrisperWhisper 2.0: モデルと、その出力（文字起こし）は「非商用」に限られます。
       取得時に agree と入力する必要があります（または -AcceptLicense）
     - Seed-VC は GPL-3.0、Qwen3-ASR と MeanVC2 は Apache-2.0、MioCodec は MIT

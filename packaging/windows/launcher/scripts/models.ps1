@@ -1,5 +1,5 @@
-# models.ps1 - the models the launcher can download (download_model.ps1) and add to
-# server_config.json (start_server.ps1). Dot-sourced by both.
+# models.ps1 - the models the launcher can download (download_model.ps1) or convert
+# (convert_v4_large.ps1) and add to server_config.json (start_server.ps1). Dot-sourced by all three.
 #
 # Files land where upstream's model manager puts the same packages (models\<target directory>\<file>,
 # as in model_specs\*.json), so the WebUI's model management sees them as installed too.
@@ -88,10 +88,45 @@ $LauncherModels = @(
              "  Details: https://huggingface.co/Aratako/MioCodec-25Hz-44.1kHz-v2") + $vcEthics))
 )
 
+# Irodori-TTS v4 Large has no published GGUF: its text encoder comes from Gemma, so the Gemma Terms
+# of Use apply. convert_v4_large.ps1 downloads the original checkpoint and the DACVAE codec at
+# these revisions and converts them with audiocpp_gguf.exe. "Type" is the --type of the conversion.
+$LargeSource = [pscustomobject]@{ Repo = "Aratako/Irodori-TTS-v4-Large"; Revision = "2e0c55428ce97268a507f1feeb2478f8d9148e8b" }
+$DacvaeSource = [pscustomobject]@{ Repo = "Aratako/Semantic-DACVAE-Japanese-32dim"; Revision = "47376ee24834d7a05a48ebabfe3cde29b3c5e214"
+                                   File = "weights.pth" }
+$largeNotice = @(
+  "Irodori-TTS v4 Large is released by Aratako. Its text and caption encoder is derived from",
+  "  Google's T5Gemma 2, so the model and the GGUF made from it are subject to the Gemma Terms",
+  "  of Use and the Gemma Prohibited Use Policy (both are saved with the downloaded files and",
+  "  embedded in the GGUF). The ethical restrictions of Irodori-TTS apply as well:",
+  $irodoriNotice[1], $irodoriNotice[2], $irodoriNotice[3],
+  "  Details: https://huggingface.co/Aratako/Irodori-TTS-v4-Large",
+  "  Gemma Terms of Use: https://ai.google.dev/gemma/terms")
+
+function New-ConvertedModel([string]$Type, [string]$Title, [double]$SizeGB, [string]$Id, [string]$LocalPath,
+                            [bool]$IsDefault = $false) {
+  $m = New-LauncherModel "irodori-v4-large-$($Type -replace '_', '')" $Title "Text to speech (Irodori-TTS)" $SizeGB `
+    $Id "irodori_tts" "tts" $LargeSource.Repo $LargeSource.Revision "" $LocalPath "Gemma Terms of Use" $largeNotice $true $IsDefault
+  $m | Add-Member -NotePropertyName Type -NotePropertyValue $Type
+  return $m
+}
+
+$ConvertedModels = @(
+  (New-ConvertedModel "q8_0" "Irodori-TTS v4 Large, GGUF Q8_0" 4.24 "irodori-tts-v4-large" `
+    "Irodori-TTS-v4-Large-GGUF\irodori-tts-v4-large-q8_0.gguf" $true),
+  (New-ConvertedModel "q6_k" "Irodori-TTS v4 Large, GGUF Q6_K" 3.63 "irodori-tts-v4-large-q6_k" `
+    "Irodori-TTS-v4-Large-GGUF-q6_k\irodori-tts-v4-large-q6_k.gguf"),
+  (New-ConvertedModel "q5_k" "Irodori-TTS v4 Large, GGUF Q5_K" 3.30 "irodori-tts-v4-large-q5_k" `
+    "Irodori-TTS-v4-Large-GGUF-q5_k\irodori-tts-v4-large-q5_k.gguf"),
+  (New-ConvertedModel "q4_k" "Irodori-TTS v4 Large, GGUF Q4_K" 2.98 "irodori-tts-v4-large-q4_k" `
+    "Irodori-TTS-v4-Large-GGUF-q4_k\irodori-tts-v4-large-q4_k.gguf")
+)
+
 function Get-LauncherModelFile($model, [string]$root) {
   return Join-Path $root ("models\" + $model.LocalPath)
 }
 
+# Downloaded and converted models (start_server.ps1 adds both to server_config.json).
 function Get-DownloadedLauncherModels([string]$root) {
-  return @($LauncherModels | Where-Object { Test-Path -LiteralPath (Get-LauncherModelFile $_ $root) -PathType Leaf })
+  return @(($LauncherModels + $ConvertedModels) | Where-Object { Test-Path -LiteralPath (Get-LauncherModelFile $_ $root) -PathType Leaf })
 }
