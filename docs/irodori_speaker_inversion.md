@@ -37,6 +37,15 @@ that keep their settings and behave the same in the WebUI with and without
 model management ([#971](https://github.com/0xShug0/audio.cpp/pull/971),
 [#972](https://github.com/0xShug0/audio.cpp/pull/972)).
 
+Five more were merged after v0.9.3 and are part of this branch's base:
+Irodori-TTS v4 Large ([#1163](https://github.com/0xShug0/audio.cpp/pull/1163)),
+input text normalized like Python Irodori-TTS
+([#1164](https://github.com/0xShug0/audio.cpp/pull/1164)), less memory for
+the sampler's context ([#1168](https://github.com/0xShug0/audio.cpp/pull/1168),
+[#1170](https://github.com/0xShug0/audio.cpp/pull/1170)), and `.pth`
+checkpoints that wrap their state dict, such as the DACVAE codec's
+([#1174](https://github.com/0xShug0/audio.cpp/pull/1174)).
+
 Speaker Inversion itself is now part of upstream. This branch builds on it and
 keeps what upstream does not have, for people who use Irodori-TTS: the
 Irodori-TTS-Server compatible request fields and embeddings in the server's
@@ -50,8 +59,8 @@ these can read the changes or check out and build this branch.
 
 | | |
 |---|---|
-| Based on | audio.cpp **`v0.9.3`** (`41c1f8f`, 2026-10-26). Published as **v0.9.3** (branch `irodori-speaker-inversion/v0.9.3`). See [Port to v0.9.3](#port-to-v093). |
-| Previous releases | Branch `irodori-speaker-inversion/v0.9.2-r2` (tag `irodori-speaker-inversion-v0.9.2-r2`) on upstream `main` at `ccdbe76`, see [v0.9.2-r2](#v092-r2); branch `irodori-speaker-inversion/v0.9.2` (tag `irodori-speaker-inversion-v0.9.2`) on upstream `v0.9.2`, see [Port to v0.9.2](#port-to-v092). They stay as they are. |
+| Based on | audio.cpp **`main` at `06c1373`** (2026-11-03, 62 commits after `v0.9.3`). Published as **v0.9.3-r2** (branch `irodori-speaker-inversion/v0.9.3-r2`). See [v0.9.3-r2](#v093-r2). |
+| Previous releases | Branch `irodori-speaker-inversion/v0.9.3` (tag `irodori-speaker-inversion-v0.9.3`) on upstream `v0.9.3`, see [Port to v0.9.3](#port-to-v093); Branch `irodori-speaker-inversion/v0.9.2-r2` (tag `irodori-speaker-inversion-v0.9.2-r2`) on upstream `main` at `ccdbe76`, see [v0.9.2-r2](#v092-r2); branch `irodori-speaker-inversion/v0.9.2` (tag `irodori-speaker-inversion-v0.9.2`) on upstream `v0.9.2`, see [Port to v0.9.2](#port-to-v092). They stay as they are. |
 | Older bases | The working branches on upstream `main` between v0.9.1 and v0.9.2, and after v0.9.2 before r2, were not published; see [Port to upstream main](#port-to-upstream-main-after-v091). Branch `irodori-speaker-inversion/v0.9.0` (tag `irodori-speaker-inversion-v0.9.0`) carries the same feature on `v0.9.0`, with this fork's own implementation of the parts that are now upstream. Branch `irodori-speaker-inversion/v0.8.2` (tags `irodori-speaker-inversion-v0.8.2` to `-r4`) carries the same feature on `v0.8.2`, and `irodori-speaker-inversion/v0.5.1` on `release-0.5.1`. They stay as they are; this branch is a port, not a replacement of their history. See [Port to v0.9.1](#port-to-v091) (not published) and [Port to v0.9.0](#port-to-v090). |
 
 ## What this branch changes
@@ -135,6 +144,57 @@ Audio output is identical to r3:
   [packaging/windows/README.md](../packaging/windows/README.md)): scripts that
   download the model, create a server config with the memory options on, and
   start the server with the WebUI. Also published as a release asset of r3 and r4.
+
+### v0.9.3-r2
+
+Rebuilt on upstream `main` at `06c1373`, 62 commits after v0.9.3, ahead of
+upstream's next release. The version string stays 0.9.3
+(`0.9.3-r2-irodori-speaker-inversion`). For Irodori-TTS, upstream now has:
+
+- [#1163](https://github.com/0xShug0/audio.cpp/pull/1163): **Irodori-TTS v4
+  Large** (3.3B parameters, with a T5Gemma 2 text and caption encoder). It has
+  no published GGUF, because the Gemma Terms of Use apply to that encoder; see
+  the launcher below for making one.
+- [#1164](https://github.com/0xShug0/audio.cpp/pull/1164): the input text is
+  normalized as Python Irodori-TTS does (symbol and width replacements, NFKC,
+  and so on). Text with such characters can sound different from v0.9.3.
+- [#1168](https://github.com/0xShug0/audio.cpp/pull/1168): the sampler reads
+  its context in place instead of copying it for every request. Same output,
+  less memory, and RF sampling 5–8% faster (measured by upstream).
+- [#1170](https://github.com/0xShug0/audio.cpp/pull/1170): a request without a
+  caption leaves the caption's slots out of the sampler's context, which saves
+  more memory with v4 Large. **Output without a caption changes slightly with
+  Q8_0 checkpoints** (with F16 it is the same; we heard no difference in
+  quality). Requests with a caption, and v3, are unchanged.
+- [#1174](https://github.com/0xShug0/audio.cpp/pull/1174): `audiocpp_gguf`
+  reads the DACVAE codec's original `weights.pth`.
+
+Other upstream changes include a WebGPU backend, new models, 400 responses
+for malformed option values
+([#1123](https://github.com/0xShug0/audio.cpp/pull/1123)), and loading an
+installed package by id through `POST /v1/models/load`
+([#1098](https://github.com/0xShug0/audio.cpp/pull/1098)). This fork's commits
+are carried over unchanged, apart from a rebuilt
+`webui/native/dist/index.html`.
+
+The binary packages now include **`audiocpp_gguf.exe`**, upstream's GGUF
+converter. The Windows launcher uses it in a new script,
+**`convert_v4_large.bat`**:
+
+- It shows the Gemma Terms of Use and asks you to accept them.
+- It downloads the original checkpoint
+  ([Aratako/Irodori-TTS-v4-Large](https://huggingface.co/Aratako/Irodori-TTS-v4-Large))
+  and the codec (Aratako/Semantic-DACVAE-Japanese-32dim), about 13.6 GB, at
+  fixed revisions.
+- It converts them to Q8_0 (default), Q6_K, Q5_K or Q4_K, without Python.
+  The result has the same tensors as `tools/models/convert_irodori_gguf.py`
+  makes.
+- `start_server.bat` then adds the model (id `irodori-tts-v4-large`, or
+  `irodori-tts-v4-large-q4_k` and so on).
+
+With the launcher's memory options, v4 Large uses about 5 GB of GPU memory
+with Q8_0 and 4 GB with Q4_K; the first request takes up to a minute to load
+it. If you share a converted file, the Gemma Terms of Use apply to it as well.
 
 ### Port to v0.9.3
 
@@ -739,6 +799,19 @@ in the WebUI Studio lists the voice library and generates with an embedding as
 before. `server_config_test`, `server_voice_preset_test`,
 `audio_post_process_test` and `server_parallel_lifecycle_test` pass.
 
+**v0.9.3-r2.** Built the same way, the CUDA output differs from v0.9.3 only
+by #1170: a build without #1170 gives output bit-identical to v0.9.3 for the
+same requests (default options and the four memory options, short, long and
+reference-WAV texts). The CPU backend gives output bit-identical to v0.9.3.
+The production-style config gives the new outputs. The compatibility fields,
+post-processing and streaming give the same responses as v0.9.3: the cases
+that should give the same audio still do, every WAV has the same length, and
+only the waveform (#1170), the path in one error message and the streaming
+timing differ. The same four unit tests and `torch_bin_storage_offset_test`
+pass. `convert_v4_large.bat` made Q8_0 and Q4_K files whose 1,708 tensors are
+identical to those of `tools/models/convert_irodori_gguf.py`, and both
+generated speech after `start_server.bat` added them.
+
 **v3 embeddings on v4.** An embedding trained against the 500M v3 checkpoint
 loads and runs on v4 Small: both use `speaker_dim = 768`. In a listening test
 on the v0.5.1 branch with the same text, seed and embedding, v3 and v4 sounded
@@ -859,5 +932,5 @@ New files added by this branch: `include/cuda_msvc_compat.h`, `include/engine/fr
 - [audio.cpp](https://github.com/0xShug0/audio.cpp) by ShugoAI LLC, the base of this fork.
 - [Irodori-TTS](https://github.com/Aratako/Irodori-TTS) by Aratako, the model family and Speaker Inversion training.
 - Development was AI-assisted: the initial implementation with Antigravity (Gemini), and the later
-  fixes, tests, review, curation, the ports to v0.8.2, v0.9.0, v0.9.1, upstream main, v0.9.2, v0.9.2-r2 and v0.9.3, and the upstream pull requests with Claude. Claude's involvement is also
+  fixes, tests, review, curation, the ports to v0.8.2, v0.9.0, v0.9.1, upstream main, v0.9.2, v0.9.2-r2, v0.9.3 and v0.9.3-r2, and the upstream pull requests with Claude. Claude's involvement is also
   recorded in each commit's `Co-Authored-By` trailers.
