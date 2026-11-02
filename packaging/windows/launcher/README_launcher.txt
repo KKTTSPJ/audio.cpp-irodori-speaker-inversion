@@ -88,7 +88,9 @@ Irodori-TTS v4 Large (convert_v4_large.bat)
   space and about 4 GB of free memory; each type takes a few minutes (Q4_K:
   1.5 min on a PC with an NVMe SSD, mostly reading the 13 GB checkpoint). At the end
   it asks whether to delete sources\ (keep it to make another type later).
-  start_server.bat then adds the model like a downloaded one. With the memory
+  start_server.bat then adds the model like a downloaded one. Its first
+  request loads it, which can take up to a minute; later requests are quick
+  (a 4 s line in about 1.5 s on an RTX 5060 Ti). With the memory
   settings below, v4 Large uses about 5 GB of GPU memory with Q8_0 and about
   4 GB with Q4_K. All four types sounded fine in our listening tests; Q4_K and
   Q5_K may deliver a voice-design caption a little differently. If you share a
@@ -256,7 +258,8 @@ audiocpp_server.exe を、設定ファイルを手で書かずに Irodori-TTS �
     約 4 GB 必要で、1 種類あたり数分かかります（Q4_K は NVMe の PC で 1.5 分。大半は 13 GB の
     チェックポイントの読み込み）。最後に sources\ を削除するか尋ねます
     （別の種類を後で作るなら残してください）。変換したモデルは、取得したモデルと同じように
-    start_server.bat が追加します。下のメモリの設定のもとで、GPU のメモリは Q8_0 で約 5 GB、
+    start_server.bat が追加します。最初のリクエストで読み込むので 1 分ほどかかることがありますが、
+    その後は速くなります（RTX 5060 Ti で 4 秒の文を約 1.5 秒）。下のメモリの設定のもとで、GPU のメモリは Q8_0 で約 5 GB、
     Q4_K で約 4 GB です。試聴ではどの種類も問題なく、Q4_K と Q5_K は声のデザインの caption の
     演じ方が少し変わることがあります。変換したファイルを人に渡す場合も Gemma の利用規約が
     適用されます。
